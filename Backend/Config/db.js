@@ -1,15 +1,24 @@
 import sql from 'mssql';
+import dotenv from 'dotenv';
+
+dotenv.config();
 
 const config = {
-  user: 'sa',
-  password: '123',
-  server: '127.0.0.1',
-  port: 1433,
-  database: 'PetCareX',
+  user: process.env.DB_USER || 'sa',
+  password: process.env.DB_PASSWORD || '123',
+  server: process.env.DB_SERVER || '127.0.0.1',
+  port: parseInt(process.env.DB_PORT) || 1433,
+  database: process.env.DB_DATABASE || 'PetCareX',
   options: {
     trustServerCertificate: true
   }
 };
+
+console.log('Database config:', { 
+  server: config.server, 
+  database: config.database, 
+  user: config.user 
+});
 
 export const poolPromise = new sql.ConnectionPool(config)
   .connect()

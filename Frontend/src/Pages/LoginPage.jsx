@@ -3,14 +3,14 @@ import { useAuth } from "../AuthContext";
 import { useNavigate } from "react-router-dom";
 
 const LoginPage = () => {
-  const { login } = useAuth();
+  const { cusLogin } = useAuth();
   const [hoten, setHoten] = useState("");
   const [sdt, setSdt] = useState("");
   
   const navigate = useNavigate();
 
   const handleLogin = async () => {
-    const ok = await login(hoten, sdt);
+    const ok = await cusLogin(hoten, sdt);
     if (!ok) {
       alert("Sai tài khoản hoặc mật khẩu");
     } else {

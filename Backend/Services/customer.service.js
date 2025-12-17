@@ -3,7 +3,6 @@ import sql from 'mssql';
 
 async function findByPhoneNum(sdt) {
     try {
-        
         const pool = await poolPromise;
         
         const result = await pool.request()

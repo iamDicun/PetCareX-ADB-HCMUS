@@ -1,7 +1,7 @@
 import express from 'express';
-const router = express.Router();
+const cusRouter = express.Router();
 import cusController from '../Controllers/customer.controller.js';
 
-router.post('/login', cusController.Login);
+cusRouter.post('/login', cusController.Login);
 
-export default router;
+export default cusRouter;

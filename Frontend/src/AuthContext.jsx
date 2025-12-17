@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
+    
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -14,7 +15,7 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, []);
 
-  const login = async (hoten, sdt) => {
+  const cusLogin = async (hoten, sdt) => {
     const res = await fetch("http://localhost:5000/api/customer/login", {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -36,7 +37,7 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, cusLogin, logout, loading }}>
       {!loading && children}
     </AuthContext.Provider>
   );

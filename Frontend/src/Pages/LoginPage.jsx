@@ -2,28 +2,100 @@ import { useState } from "react";
 import { useAuth } from "../AuthContext";
 import { useNavigate } from "react-router-dom";
 
-const LoginPage = () => {
-  const { cusLogin } = useAuth();
+const LoginPage = ({ role = 'customer' }) => {
+  const { cusLogin, staffLogin } = useAuth();
   const [hoten, setHoten] = useState("");
   const [sdt, setSdt] = useState("");
   
   const navigate = useNavigate();
 
-  const handleLogin = async () => {
-    const ok = await cusLogin(hoten, sdt);
-    if (!ok) {
-      alert("Sai tài khoản hoặc mật khẩu");
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    let ok = false;
+    if (role === 'staff') {
+        ok = await staffLogin(hoten, sdt);
     } else {
-      navigate("/CustomerPage");
+        ok = await cusLogin(hoten, sdt);
+    }
+
+    if (!ok) {
+      alert("Sai thông tin đăng nhập");
+    } else {
+      if (role === 'staff') {
+          navigate("/staff/dashboard"); // Placeholder
+      } else {
+          navigate("/CustomerPage");
+      }
     }
   };
 
+  const containerStyle = {
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: '100vh',
+    backgroundColor: '#2c3e50'
+  };
+
+  const formStyle = {
+    backgroundColor: 'white',
+    padding: '40px',
+    borderRadius: '8px',
+    boxShadow: '0 4px 10px rgba(0,0,0,0.1)',
+    width: '300px',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '15px'
+  };
+
+  const inputStyle = {
+    padding: '10px',
+    borderRadius: '4px',
+    border: '1px solid #ccc',
+    fontSize: '16px'
+  };
+
+  const buttonStyle = {
+    padding: '10px',
+    backgroundColor: '#3498db',
+    color: 'white',
+    border: 'none',
+    borderRadius: '4px',
+    fontSize: '16px',
+    cursor: 'pointer'
+  };
+
   return (
-    <>
-      <input value={hoten} onChange={(e) => setHoten(e.target.value)} placeholder="Họ tên" />
-      <input value={sdt} type="text" onChange={(e) => setSdt(e.target.value)} placeholder="Số điện thoại" />
-      <button onClick={handleLogin}>Đăng nhập</button>
-    </>
+    <div style={containerStyle}>
+      <form style={formStyle} onSubmit={handleLogin}>
+        <h2 style={{ textAlign: 'center', color: '#333', margin: '0 0 20px 0' }}>
+            {role === 'staff' ? 'Staff Login' : 'Customer Login'}
+        </h2>
+        <input 
+            style={inputStyle}
+            value={hoten} 
+            onChange={(e) => setHoten(e.target.value)} 
+            placeholder="Họ tên" 
+            required
+        />
+        <input 
+            style={inputStyle}
+            value={sdt} 
+            type="text" 
+            onChange={(e) => setSdt(e.target.value)} 
+            placeholder="Số điện thoại" 
+            required
+        />
+        <button type="submit" style={buttonStyle}>Đăng nhập</button>
+        <button 
+            type="button" 
+            onClick={() => navigate('/')}
+            style={{ ...buttonStyle, backgroundColor: '#95a5a6', marginTop: '10px' }}
+        >
+            Back
+        </button>
+      </form>
+    </div>
   );
 };
 

@@ -1,4 +1,5 @@
 import CusService from '../Services/customer.service.js';
+import jwt from 'jsonwebtoken';
 
 const cusController = {
     Login : async (req, res) => {
@@ -12,7 +13,13 @@ const cusController = {
             const customer = await CusService.findByPhoneNum(sdt);
             
             if (customer) {
-                res.json({ success: true, customer: customer });
+                const token = jwt.sign(
+                    { id: customer.MaKhachHang, role: 'customer', name: customer.HoTen },
+                    process.env.JWT_SECRET,
+                    { expiresIn: '24h' }
+                );
+                console.log('Customer logged in:', customer.HoTen);
+                res.json({ success: true, customer: customer, token: token });
             } else {
                 res.json({ success: false, message: 'Sai thông tin đăng nhập' });
             }

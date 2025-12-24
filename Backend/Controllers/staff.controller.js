@@ -1,4 +1,5 @@
 import staffService from "../Services/staff.service.js";
+import jwt from 'jsonwebtoken';
 
 const staffController = {
     async login(req, res) {
@@ -9,7 +10,13 @@ const staffController = {
             }
             const staff = await staffService.findByPhoneNum(sdt);
             if (staff) {
-                res.json({ success: true, staff: staff });
+                const token = jwt.sign(
+                    { id: staff.MaNhanVien, role: 'staff', name: staff.HoTen },
+                    process.env.JWT_SECRET,
+                    { expiresIn: '24h' }
+                );
+                console.log('Staff logged in:', staff.HoTen);
+                res.json({ success: true, staff: staff, token: token });
             } else {
                 res.json({ success: false, message: 'Sai thông tin đăng nhập' });
             }

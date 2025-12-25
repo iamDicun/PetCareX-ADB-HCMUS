@@ -1,4 +1,4 @@
-use PetCareX_test_TR
+use PetCareX
 go
 CREATE TRIGGER TR_KhachHang_AfterInsert_TaoThe
 ON KhachHang

@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 
 const LoginPage = () => {
   const { cusLogin, staffLogin } = useAuth();
-  const [activeTab, setActiveTab] = useState('customer'); // 'customer' or 'staff'
+  const [activeTab, setActiveTab] = useState('customer');
   const [hoten, setHoten] = useState("");
   const [sdt, setSdt] = useState("");
   
@@ -23,7 +23,7 @@ const LoginPage = () => {
       alert("Sai thông tin đăng nhập");
     } else {
       if (activeTab === 'staff') {
-          navigate("/staff/dashboard");
+          navigate("/Staff/Dashboard");
       } else {
           navigate("/CustomerPage");
       }
@@ -84,25 +84,30 @@ const LoginPage = () => {
 
   return (
     <div style={containerStyle}>
-      <form style={formStyle} onSubmit={handleLogin}>
-        <div style={tabContainerStyle}>
-            <div 
-                style={tabStyle(activeTab === 'customer')} 
-                onClick={() => setActiveTab('customer')}
-            >
-                Khách hàng
-            </div>
-            <div 
-                style={tabStyle(activeTab === 'staff')} 
-                onClick={() => setActiveTab('staff')}
-            >
-                Nhân viên
-            </div>
-        </div>
+      
 
+      <form style={formStyle} onSubmit={handleLogin}>
         <h2 style={{ textAlign: 'center', color: '#333', margin: '0 0 20px 0' }}>
             {activeTab === 'staff' ? 'Đăng nhập Nhân viên' : 'Đăng nhập Khách hàng'}
         </h2>
+        <div style={tabContainerStyle}>
+          <button
+            type="button"
+            style={tabStyle(activeTab === 'customer')}
+            onClick={() => setActiveTab('customer')}
+          >
+            Khách hàng
+          </button>
+
+          <button
+            type="button"
+            style={tabStyle(activeTab === 'staff')}
+            onClick={() => setActiveTab('staff')}
+          >
+            Nhân viên
+          </button>
+        </div>
+
         <input 
             style={inputStyle}
             value={hoten} 

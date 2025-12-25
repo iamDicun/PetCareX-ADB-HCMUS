@@ -18,7 +18,7 @@ function App() {
             
             {/* Protected Routes */}
             <Route path="/CustomerPage" element={<CustomerPage />} />
-            <Route path="/staff/dashboard" element={<StaffDashboard />} />
+            <Route path="/Staff/Dashboard" element={<StaffDashboard />} />
 
           </Routes>
         </div>

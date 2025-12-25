@@ -45,8 +45,9 @@ CREATE TABLE ChiNhanh (
 CREATE TABLE SanPham (
     MaSanPham UNIQUEIDENTIFIER PRIMARY KEY DEFAULT NEWSEQUENTIALID(),
     TenSanPham NVARCHAR(100) NOT NULL,
+
+    MoTa NVARCHAR(MAX) NULL, 
     
-    -- FK trỏ về bảng Loại (Manual)
     MaLoai VARCHAR(20) REFERENCES LoaiSanPham(MaLoai), 
     
     GiaBan DECIMAL(18, 0) DEFAULT 0, 

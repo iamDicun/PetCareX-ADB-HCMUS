@@ -23,7 +23,25 @@ const LoginPage = () => {
       alert("Sai thông tin đăng nhập");
     } else {
       if (activeTab === 'staff') {
-          navigate("/Staff/Dashboard");
+          // Get user from localStorage to check position
+          const userData = JSON.parse(localStorage.getItem('user'));
+          const position = userData?.ChucVu;
+          
+          // Route based on position
+          if (position === 'Nhân viên tiếp tân' || position === 'Nhân viên bán hàng') {
+              navigate("/Staff/Dashboard");
+          } else if (position === 'Bác sĩ thú y') {
+              navigate("/Doctor/Dashboard");
+          } else if (position === 'Nhân viên chăm sóc') {
+              navigate("/CareStaff/Dashboard");
+          } else if (position === 'Quản lý chi nhánh') {
+              navigate("/BranchManager/Dashboard");
+          } else if (position === 'Quản lý cấp công ty') {
+              navigate("/CompanyManager/Dashboard");
+          } else {
+              // Default to staff dashboard for other positions
+              navigate("/Staff/Dashboard");
+          }
       } else {
           navigate("/CustomerPage");
       }

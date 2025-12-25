@@ -14,9 +14,11 @@ app.use(bodyParser.urlencoded({ extended: true }));
 import cusRouter from './Routes/customer.routes.js';
 import staffRouter from './Routes/staff.routes.js';
 import appmRouter from './Routes/appoinment.routes.js';
+import careStaffRouter from './Routes/carestaff.routes.js';
 
 
 app.use('/api/customer', cusRouter);
 app.use('/api/staff', staffRouter);
 app.use('/api/appointment', appmRouter);
+app.use('/api/carestaff', careStaffRouter);
 export default app;

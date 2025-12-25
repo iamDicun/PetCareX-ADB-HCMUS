@@ -7,6 +7,7 @@ staffRouter.get('/products', staffController.getProducts);
 staffRouter.get('/services', staffController.getServices);
 staffRouter.post('/customer/find-or-create', staffController.findOrCreateCustomer);
 staffRouter.get('/doctors/available', staffController.getAvailableDoctors);
+staffRouter.get('/carestaff/available', staffController.getAvailableCareStaff);
 staffRouter.post('/order/create', staffController.createOrder);
 staffRouter.post('/appointment/create', staffController.createAppointment);
 staffRouter.get('/orders/pending', staffController.getPendingOrders);

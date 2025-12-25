@@ -26,11 +26,6 @@ const StaffDashboard = () => {
     const [services, setServices] = useState([]);
     const [selectedItems, setSelectedItems] = useState([]);
     
-    // For appointments
-    const [appointmentDateTime, setAppointmentDateTime] = useState('');
-    const [availableDoctors, setAvailableDoctors] = useState([]);
-    const [selectedDoctor, setSelectedDoctor] = useState('');
-    
     // Pending lists
     const [pendingOrders, setPendingOrders] = useState([]);
     const [pendingAppointments, setPendingAppointments] = useState([]);
@@ -44,7 +39,6 @@ const StaffDashboard = () => {
     const [showDetailsModal, setShowDetailsModal] = useState(false);
     const [detailsType, setDetailsType] = useState('');
     const [detailsData, setDetailsData] = useState([]);
-    const [selectedItem, setSelectedItem] = useState(null);
 
     const API_URL = 'http://localhost:5000/api';
 
@@ -150,31 +144,6 @@ const StaffDashboard = () => {
         }
     };
 
-    const handleCheckAvailableDoctors = async () => {
-        if (!appointmentDateTime) {
-            alert('Vui lòng chọn thời gian');
-            return;
-        }
-        
-        try {
-            const token = localStorage.getItem('token');
-            const res = await fetch(
-                `${API_URL}/staff/doctors/available?branchId=${user.MaChiNhanh}&dateTime=${appointmentDateTime}`,
-                { headers: { 'Authorization': `Bearer ${token}` } }
-            );
-            
-            const data = await res.json();
-            if (data.success) {
-                setAvailableDoctors(data.doctors);
-                if (data.doctors.length === 0) {
-                    alert('Không có bác sĩ trống trong thời gian này');
-                }
-            }
-        } catch (error) {
-            console.error('Error checking doctors:', error);
-        }
-    };
-
     const handleAddItem = (item) => {
         const existing = selectedItems.find(i => 
             createType === 'order' ? i.MaSanPham === item.MaSanPham : i.MaDichVu === item.MaDichVu
@@ -198,7 +167,7 @@ const StaffDashboard = () => {
         setSelectedItems(newItems);
     };
 
-    const handleSubmitCreate = async () => {
+    const handleSubmitCreate = async (serviceStaffAssignments = null) => {
         if (!customer) {
             alert('Vui lòng tìm khách hàng trước');
             return;
@@ -242,16 +211,14 @@ const StaffDashboard = () => {
                     alert('Lỗi: ' + data.message);
                 }
             } else {
+                // For appointments with multiple services
                 if (!selectedPet) {
                     alert('Vui lòng chọn thú cưng');
                     return;
                 }
-                if (!appointmentDateTime) {
-                    alert('Vui lòng chọn thời gian');
-                    return;
-                }
-                if (!selectedDoctor) {
-                    alert('Vui lòng chọn bác sĩ');
+                
+                if (!serviceStaffAssignments || serviceStaffAssignments.length === 0) {
+                    alert('Vui lòng chọn nhân viên cho các dịch vụ');
                     return;
                 }
                 
@@ -260,11 +227,11 @@ const StaffDashboard = () => {
                     maThuCung: selectedPet,
                     maChiNhanh: user.MaChiNhanh,
                     maNhanVien: user.MaNhanVien,
-                    ngayGioHen: appointmentDateTime,
-                    services: selectedItems.map(item => ({
-                        maDichVu: item.MaDichVu,
-                        maBacSi: selectedDoctor,
-                        donGia: item.GiaNiemYet
+                    services: serviceStaffAssignments.map(assignment => ({
+                        maDichVu: assignment.service.MaDichVu,
+                        maBacSi: assignment.selectedStaff,
+                        donGia: assignment.service.GiaNiemYet,
+                        ngayGioHen: assignment.dateTime
                     }))
                 };
                 
@@ -282,6 +249,7 @@ const StaffDashboard = () => {
                     alert('Tạo lịch hẹn thành công!');
                     handleCloseCreateModal();
                     loadPendingData();
+                    loadPendingAppointments();
                 } else {
                     alert('Lỗi: ' + data.message);
                 }
@@ -303,13 +271,9 @@ const StaffDashboard = () => {
         setProducts([]);
         setServices([]);
         setSelectedItems([]);
-        setAppointmentDateTime('');
-        setAvailableDoctors([]);
-        setSelectedDoctor('');
     };
 
     const handleViewDetails = async (item, type) => {
-        setSelectedItem(item);
         setDetailsType(type);
         setShowDetailsModal(true);
         
@@ -468,16 +432,10 @@ const StaffDashboard = () => {
                 customerPets={customerPets}
                 selectedPet={selectedPet}
                 setSelectedPet={setSelectedPet}
-                appointmentDateTime={appointmentDateTime}
-                setAppointmentDateTime={setAppointmentDateTime}
-                availableDoctors={availableDoctors}
-                selectedDoctor={selectedDoctor}
-                setSelectedDoctor={setSelectedDoctor}
                 products={products}
                 services={services}
                 selectedItems={selectedItems}
                 onFindCustomer={handleFindCustomer}
-                onCheckDoctors={handleCheckAvailableDoctors}
                 onAddItem={handleAddItem}
                 onRemoveItem={handleRemoveItem}
                 onQuantityChange={handleQuantityChange}
@@ -487,6 +445,9 @@ const StaffDashboard = () => {
                 modalContentStyle={modalContentStyle}
                 buttonStyle={buttonStyle}
                 inputStyle={inputStyle}
+                branchId={user?.MaChiNhanh}
+                apiUrl={API_URL}
+                token={localStorage.getItem('token')}
             />
 
             <DetailsModal 

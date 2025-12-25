@@ -109,16 +109,76 @@ async function getAvailableDoctors(branchId, dateTime) {
                 AND NV.ChucVu = N'Bác sĩ thú y'
                 AND NV.NgayNghiViec IS NULL
                 AND NOT EXISTS (
-                    SELECT 1 FROM LichHen LH
+                    SELECT 1 
+                    FROM LichHen LH
                     JOIN ChiTietLichHen CTLH ON LH.MaLichHen = CTLH.MaLichHen
+                    JOIN DichVu DV ON CTLH.MaDichVu = DV.MaDichVu
                     WHERE CTLH.MaBacSi = NV.MaNhanVien
                     AND LH.TrangThai IN (N'Chờ xác nhận', N'Đã xác nhận')
-                    AND ABS(DATEDIFF(MINUTE, LH.NgayGioHen, @dateTime)) < 60
+                    AND (
+                        -- Check if new appointment time falls within existing appointment window
+                        (@dateTime >= LH.NgayGioHen AND @dateTime < DATEADD(MINUTE, ISNULL(DV.ThoiGianThucHienDuKien, 60), LH.NgayGioHen))
+                        OR
+                        -- Check if existing appointment falls within new appointment window (assuming 60 min default)
+                        (LH.NgayGioHen >= @dateTime AND LH.NgayGioHen < DATEADD(MINUTE, 60, @dateTime))
+                    )
                 )
             `);
         return result.recordset;
     } catch (error) {
         console.error('[getAvailableDoctors] Error:', error.message, error);
+        throw error;
+    }
+}
+
+async function getAvailableCareStaff(branchId, dateTime) {
+    try {
+        const pool = await poolPromise;
+        
+        // First, check total care staff in branch
+        const totalResult = await pool.request()
+            .input('branchId', sql.UniqueIdentifier, branchId)
+            .query(`
+                SELECT COUNT(*) as Total
+                FROM NhanVien NV
+                WHERE NV.MaChiNhanh = @branchId 
+                AND NV.ChucVu = N'Nhân viên chăm sóc'
+                AND NV.NgayNghiViec IS NULL
+            `);
+        
+        console.log(`[getAvailableCareStaff] Total care staff in branch: ${totalResult.recordset[0].Total}`);
+        console.log(`[getAvailableCareStaff] Checking availability for time: ${dateTime}`);
+        
+        const result = await pool.request()
+            .input('branchId', sql.UniqueIdentifier, branchId)
+            .input('dateTime', sql.DateTime, dateTime)
+            .query(`
+                SELECT NV.MaNhanVien, NV.HoTen, NV.SoDienThoai
+                FROM NhanVien NV
+                WHERE NV.MaChiNhanh = @branchId 
+                AND NV.ChucVu = N'Nhân viên chăm sóc'
+                AND NV.NgayNghiViec IS NULL
+                AND NOT EXISTS (
+                    SELECT 1 
+                    FROM LichHen LH
+                    JOIN ChiTietLichHen CTLH ON LH.MaLichHen = CTLH.MaLichHen
+                    JOIN DichVu DV ON CTLH.MaDichVu = DV.MaDichVu
+                    WHERE CTLH.MaBacSi = NV.MaNhanVien
+                    AND LH.TrangThai IN (N'Chờ xác nhận', N'Đã xác nhận')
+                    AND (
+                        -- Check if new appointment time falls within existing appointment window
+                        (@dateTime >= LH.NgayGioHen AND @dateTime < DATEADD(MINUTE, ISNULL(DV.ThoiGianThucHienDuKien, 60), LH.NgayGioHen))
+                        OR
+                        -- Check if existing appointment falls within new appointment window (assuming 60 min default)
+                        (LH.NgayGioHen >= @dateTime AND LH.NgayGioHen < DATEADD(MINUTE, 60, @dateTime))
+                    )
+                )
+            `);
+        
+        console.log(`[getAvailableCareStaff] Available care staff: ${result.recordset.length}`);
+        return result.recordset;
+    } catch (error) {
+        console.error('[getAvailableCareStaff] Error:', error.message, error);
         throw error;
     }
 }
@@ -205,7 +265,7 @@ async function createAppointment(appointmentData) {
         await transaction.begin();
         
         try {
-            // Tạo hóa đơn
+            // Tạo hóa đơn chung
             const hoaDonResult = await new sql.Request(transaction)
                 .input('maNhanVien', sql.UniqueIdentifier, appointmentData.maNhanVien)
                 .input('maChiNhanh', sql.UniqueIdentifier, appointmentData.maChiNhanh)
@@ -218,37 +278,42 @@ async function createAppointment(appointmentData) {
             
             const maHoaDon = hoaDonResult.recordset[0].MaHoaDon;
             
-            // Tạo lịch hẹn
-            const lichHenResult = await new sql.Request(transaction)
-                .input('maKhachHang', sql.UniqueIdentifier, appointmentData.maKhachHang)
-                .input('maThuCung', sql.UniqueIdentifier, appointmentData.maThuCung)
-                .input('maChiNhanh', sql.UniqueIdentifier, appointmentData.maChiNhanh)
-                .input('maNVTao', sql.UniqueIdentifier, appointmentData.maNhanVien)
-                .input('ngayGioHen', sql.DateTime, appointmentData.ngayGioHen)
-                .input('kenhDat', sql.NVarChar, 'Tại quầy')
-                .input('trangThai', sql.NVarChar, 'Đã xác nhận')
-                .input('maHoaDon', sql.UniqueIdentifier, maHoaDon)
-                .query(`
-                    INSERT INTO LichHen (MaKhachHang, MaThuCung, MaChiNhanh, MaNVTao, NgayGioHen, KenhDat, TrangThai, MaHoaDon)
-                    OUTPUT INSERTED.MaLichHen
-                    VALUES (@maKhachHang, @maThuCung, @maChiNhanh, @maNVTao, @ngayGioHen, @kenhDat, @trangThai, @maHoaDon)
-                `);
-            
-            const maLichHen = lichHenResult.recordset[0].MaLichHen;
-            
-            // Thêm chi tiết lịch hẹn
             let tongPhu = 0;
-            for (const item of appointmentData.services) {
+            const maLichHenList = [];
+            
+            // Tạo lịch hẹn riêng cho mỗi dịch vụ
+            for (const service of appointmentData.services) {
+                // Tạo lịch hẹn
+                const lichHenResult = await new sql.Request(transaction)
+                    .input('maKhachHang', sql.UniqueIdentifier, appointmentData.maKhachHang)
+                    .input('maThuCung', sql.UniqueIdentifier, appointmentData.maThuCung)
+                    .input('maChiNhanh', sql.UniqueIdentifier, appointmentData.maChiNhanh)
+                    .input('maNVTao', sql.UniqueIdentifier, appointmentData.maNhanVien)
+                    .input('ngayGioHen', sql.DateTime, service.ngayGioHen)
+                    .input('kenhDat', sql.NVarChar, 'Tại quầy')
+                    .input('trangThai', sql.NVarChar, 'Đã xác nhận')
+                    .input('maHoaDon', sql.UniqueIdentifier, maHoaDon)
+                    .query(`
+                        INSERT INTO LichHen (MaKhachHang, MaThuCung, MaChiNhanh, MaNVTao, NgayGioHen, KenhDat, TrangThai, MaHoaDon)
+                        OUTPUT INSERTED.MaLichHen
+                        VALUES (@maKhachHang, @maThuCung, @maChiNhanh, @maNVTao, @ngayGioHen, @kenhDat, @trangThai, @maHoaDon)
+                    `);
+                
+                const maLichHen = lichHenResult.recordset[0].MaLichHen;
+                maLichHenList.push(maLichHen);
+                
+                // Thêm chi tiết lịch hẹn
                 await new sql.Request(transaction)
                     .input('maLichHen', sql.UniqueIdentifier, maLichHen)
-                    .input('maDichVu', sql.UniqueIdentifier, item.maDichVu)
-                    .input('maBacSi', sql.UniqueIdentifier, item.maBacSi)
-                    .input('donGia', sql.Decimal(18, 0), item.donGia)
+                    .input('maDichVu', sql.UniqueIdentifier, service.maDichVu)
+                    .input('maBacSi', sql.UniqueIdentifier, service.maBacSi)
+                    .input('donGia', sql.Decimal(18, 0), service.donGia)
                     .query(`
                         INSERT INTO ChiTietLichHen (MaLichHen, MaDichVu, MaBacSi, DonGiaThucTe)
                         VALUES (@maLichHen, @maDichVu, @maBacSi, @donGia)
                     `);
-                tongPhu += item.donGia;
+                
+                tongPhu += service.donGia;
             }
             
             // Cập nhật tổng tiền hóa đơn
@@ -262,7 +327,7 @@ async function createAppointment(appointmentData) {
                 `);
             
             await transaction.commit();
-            return { maLichHen, maHoaDon };
+            return { maLichHenList, maHoaDon };
         } catch (error) {
             await transaction.rollback();
             throw error;
@@ -537,6 +602,41 @@ async function confirmAppointment(appointmentId, staffId) {
     }
 }
 
+async function getCareStaffAppointments(staffId) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('staffId', sql.UniqueIdentifier, staffId)
+            .query(`
+                SELECT 
+                    LH.MaLichHen,
+                    LH.NgayGioHen,
+                    LH.TrangThai,
+                    LH.GhiChu,
+                    KH.HoTen AS TenKhachHang,
+                    KH.SoDienThoai AS SoDienThoaiKH,
+                    TC.TenThuCung,
+                    TC.Giong,
+                    DV.TenDichVu,
+                    CTLH.KetQua,
+                    CTLH.ThoiGianThucHien
+                FROM LichHen LH
+                JOIN ChiTietLichHen CTLH ON LH.MaLichHen = CTLH.MaLichHen
+                JOIN KhachHang KH ON LH.MaKhachHang = KH.MaKhachHang
+                JOIN ThuCung TC ON LH.MaThuCung = TC.MaThuCung
+                JOIN DichVu DV ON CTLH.MaDichVu = DV.MaDichVu
+                WHERE CTLH.MaBacSi = @staffId
+                AND LH.TrangThai IN (N'Chờ xác nhận', N'Đã xác nhận', N'Đang thực hiện')
+                AND LH.NgayGioHen >= GETDATE()
+                ORDER BY LH.NgayGioHen ASC
+            `);
+        return result.recordset;
+    } catch (error) {
+        console.error('[getCareStaffAppointments] Error:', error.message, error);
+        throw error;
+    }
+}
+
 export default {
     findByPhoneNum,
     findCustomerId,
@@ -545,6 +645,7 @@ export default {
     getProducts,
     findOrCreateCustomer,
     getAvailableDoctors,
+    getAvailableCareStaff,
     createOrder,
     createAppointment,
     getPendingOrders,
@@ -554,4 +655,5 @@ export default {
     getCustomerPets,
     confirmOrder,
     confirmAppointment,
+    getCareStaffAppointments,
 };

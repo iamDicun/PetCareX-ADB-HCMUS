@@ -79,6 +79,20 @@ const staffController = {
         }
     },
 
+    async getAvailableCareStaff(req, res) {
+        const { branchId, dateTime } = req.query;
+        try {
+            if (!branchId || !dateTime) {
+                return res.status(400).json({ success: false, message: 'Chi nhánh và thời gian là bắt buộc' });
+            }
+            const careStaff = await staffService.getAvailableCareStaff(branchId, dateTime);
+            res.json({ success: true, careStaff });
+        } catch (error) {
+            console.error('[getAvailableCareStaff] Error:', error.message, error);
+            res.status(500).json({ success: false, message: 'Lỗi máy chủ' });
+        }
+    },
+
     async createOrder(req, res) {
         try {
             const orderData = req.body;
@@ -97,8 +111,14 @@ const staffController = {
         try {
             const appointmentData = req.body;
             if (!appointmentData.maKhachHang || !appointmentData.maChiNhanh || !appointmentData.maNhanVien || 
-                !appointmentData.ngayGioHen || !appointmentData.services || appointmentData.services.length === 0) {
+                !appointmentData.services || appointmentData.services.length === 0) {
                 return res.status(400).json({ success: false, message: 'Thiếu thông tin lịch hẹn' });
+            }
+            // Validate each service has required fields
+            for (const service of appointmentData.services) {
+                if (!service.ngayGioHen || !service.maDichVu || !service.maBacSi) {
+                    return res.status(400).json({ success: false, message: 'Mỗi dịch vụ phải có thời gian và nhân viên' });
+                }
             }
             const result = await staffService.createAppointment(appointmentData);
             res.json({ success: true, ...result });

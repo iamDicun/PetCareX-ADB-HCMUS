@@ -6,20 +6,25 @@ const cusController = {
         const { hoten, sdt } = req.body;
 
         try {
-            if (!sdt) {
-                return res.status(400).json({ success: false, message: 'Số điện thoại là bắt buộc' });
+            if (!sdt || !hoten) {
+                return res.status(400).json({ success: false, message: 'Tên và Số điện thoại là bắt buộc' });
             }
 
             const customer = await CusService.findByPhoneNum(sdt);
             
             if (customer) {
-                const token = jwt.sign(
-                    { id: customer.MaKhachHang, role: 'customer', name: customer.HoTen },
-                    process.env.JWT_SECRET,
-                    { expiresIn: '24h' }
-                );
-                console.log('Customer logged in:', customer.HoTen);
-                res.json({ success: true, customer: customer, token: token });
+                // Check if name matches (case insensitive)
+                if (customer.HoTen.toLowerCase() === hoten.toLowerCase()) {
+                    const token = jwt.sign(
+                        { id: customer.MaKhachHang, role: 'customer', name: customer.HoTen },
+                        process.env.JWT_SECRET,
+                        { expiresIn: '24h' }
+                    );
+                    console.log('Customer logged in:', customer.HoTen);
+                    res.json({ success: true, customer: customer, token: token });
+                } else {
+                    res.json({ success: false, message: 'Tên khách hàng không khớp' });
+                }
             } else {
                 res.json({ success: false, message: 'Sai thông tin đăng nhập' });
             }
@@ -29,6 +34,99 @@ const cusController = {
                 message: 'Lỗi máy chủ', 
                 error: error.message 
             });
+        }
+    },
+
+    getProducts: async (req, res) => {
+        try {
+            const products = await CusService.getProducts();
+            res.json({ success: true, data: products });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    },
+
+    getServices: async (req, res) => {
+        try {
+            const services = await CusService.getServices();
+            res.json({ success: true, data: services });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    },
+
+    search: async (req, res) => {
+        try {
+            const { keyword } = req.query;
+            const results = await CusService.search(keyword);
+            res.json({ success: true, data: results });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    },
+
+    registerPet: async (req, res) => {
+        try {
+            const result = await CusService.registerPet(req.body);
+            res.json({ success: true, message: 'Đăng ký thú cưng thành công' });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    },
+
+    getPetTypes: async (req, res) => {
+        try {
+            const types = await CusService.getPetTypes();
+            res.json({ success: true, data: types });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    },
+
+    createOrder: async (req, res) => {
+        try {
+            const result = await CusService.createOrder(req.body);
+            res.json({ success: true, data: result });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    },
+
+    createAppointment: async (req, res) => {
+        try {
+            const result = await CusService.createAppointment(req.body);
+            res.json({ success: true, data: result });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    },
+
+    getHistory: async (req, res) => {
+        try {
+            const { id } = req.params;
+            const history = await CusService.getHistory(id);
+            res.json({ success: true, data: history });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    },
+
+    getBranches: async (req, res) => {
+        try {
+            const branches = await CusService.getBranches();
+            res.json({ success: true, data: branches });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    },
+
+    getCustomerPets: async (req, res) => {
+        try {
+            const { id } = req.params;
+            const pets = await CusService.getCustomerPets(id);
+            res.json({ success: true, data: pets });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
         }
     }
 

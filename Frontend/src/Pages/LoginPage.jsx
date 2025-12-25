@@ -2,8 +2,9 @@ import { useState } from "react";
 import { useAuth } from "../AuthContext";
 import { useNavigate } from "react-router-dom";
 
-const LoginPage = ({ role = 'customer' }) => {
+const LoginPage = () => {
   const { cusLogin, staffLogin } = useAuth();
+  const [activeTab, setActiveTab] = useState('customer'); // 'customer' or 'staff'
   const [hoten, setHoten] = useState("");
   const [sdt, setSdt] = useState("");
   
@@ -12,7 +13,7 @@ const LoginPage = ({ role = 'customer' }) => {
   const handleLogin = async (e) => {
     e.preventDefault();
     let ok = false;
-    if (role === 'staff') {
+    if (activeTab === 'staff') {
         ok = await staffLogin(hoten, sdt);
     } else {
         ok = await cusLogin(hoten, sdt);
@@ -21,8 +22,8 @@ const LoginPage = ({ role = 'customer' }) => {
     if (!ok) {
       alert("Sai thông tin đăng nhập");
     } else {
-      if (role === 'staff') {
-          navigate("/staff/dashboard"); // Placeholder
+      if (activeTab === 'staff') {
+          navigate("/staff/dashboard");
       } else {
           navigate("/CustomerPage");
       }
@@ -42,7 +43,7 @@ const LoginPage = ({ role = 'customer' }) => {
     padding: '40px',
     borderRadius: '8px',
     boxShadow: '0 4px 10px rgba(0,0,0,0.1)',
-    width: '300px',
+    width: '350px',
     display: 'flex',
     flexDirection: 'column',
     gap: '15px'
@@ -65,11 +66,42 @@ const LoginPage = ({ role = 'customer' }) => {
     cursor: 'pointer'
   };
 
+  const tabContainerStyle = {
+    display: 'flex',
+    marginBottom: '20px',
+    borderBottom: '1px solid #ddd'
+  };
+
+  const tabStyle = (isActive) => ({
+    flex: 1,
+    padding: '10px',
+    textAlign: 'center',
+    cursor: 'pointer',
+    backgroundColor: isActive ? '#f1f1f1' : 'white',
+    borderBottom: isActive ? '2px solid #3498db' : 'none',
+    fontWeight: isActive ? 'bold' : 'normal'
+  });
+
   return (
     <div style={containerStyle}>
       <form style={formStyle} onSubmit={handleLogin}>
+        <div style={tabContainerStyle}>
+            <div 
+                style={tabStyle(activeTab === 'customer')} 
+                onClick={() => setActiveTab('customer')}
+            >
+                Khách hàng
+            </div>
+            <div 
+                style={tabStyle(activeTab === 'staff')} 
+                onClick={() => setActiveTab('staff')}
+            >
+                Nhân viên
+            </div>
+        </div>
+
         <h2 style={{ textAlign: 'center', color: '#333', margin: '0 0 20px 0' }}>
-            {role === 'staff' ? 'Staff Login' : 'Customer Login'}
+            {activeTab === 'staff' ? 'Đăng nhập Nhân viên' : 'Đăng nhập Khách hàng'}
         </h2>
         <input 
             style={inputStyle}
@@ -87,13 +119,6 @@ const LoginPage = ({ role = 'customer' }) => {
             required
         />
         <button type="submit" style={buttonStyle}>Đăng nhập</button>
-        <button 
-            type="button" 
-            onClick={() => navigate('/')}
-            style={{ ...buttonStyle, backgroundColor: '#95a5a6', marginTop: '10px' }}
-        >
-            Back
-        </button>
       </form>
     </div>
   );

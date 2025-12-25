@@ -14,6 +14,8 @@ const CustomerPage = () => {
     const [searchResults, setSearchResults] = useState([]);
     const [petTypes, setPetTypes] = useState([]);
     const [branches, setBranches] = useState([]);
+    const [selectedPet, setSelectedPet] = useState(null);
+    const [suitableProducts, setSuitableProducts] = useState([]);
 
     // Forms state
     const [newPet, setNewPet] = useState({
@@ -45,10 +47,26 @@ const CustomerPage = () => {
 
             if (prodRes.success) setProducts(prodRes.data);
             if (servRes.success) setServices(servRes.data);
-            if (petRes.success) setPets(petRes.data);
-            if (histRes.success) setHistory(histRes.data);
             if (typeRes.success) setPetTypes(typeRes.data);
+            if (histRes.success) setHistory(histRes.data);
             if (branchRes.success) setBranches(branchRes.data);
+            
+            if (petRes.success) {
+                setPets(petRes.data);
+                // Fetch suitable products for all pets
+                if (petRes.data.length > 0) {
+                    const suitableProds = await Promise.all(
+                        petRes.data.map(pet => 
+                            fetch(`http://localhost:5000/api/customer/suitable-products/${pet.MaThuCung}`)
+                                .then(res => res.json())
+                                .then(data => data.success ? data.data : [])
+                        )
+                    );
+                    // Flatten and deduplicate products
+                    const allSuitable = [...new Map(suitableProds.flat().map(item => [item.MaSanPham, item])).values()];
+                    setSuitableProducts(allSuitable);
+                }
+            }
 
         } catch (error) {
             console.error("Error fetching data:", error);
@@ -157,6 +175,19 @@ const CustomerPage = () => {
         }
     };
 
+    const handleViewSuitableProducts = async (petId) => {
+        try {
+            const res = await fetch(`http://localhost:5000/api/customer/suitable-products/${petId}`);
+            const data = await res.json();
+            if (data.success) {
+                setSelectedPet(pets.find(p => p.MaThuCung === petId));
+                setSuitableProducts(data.data);
+            }
+        } catch (error) {
+            console.error('Error fetching suitable products:', error);
+        }
+    };
+
     // Styles
     const containerStyle = { padding: '20px', fontFamily: 'Arial, sans-serif' };
     const headerStyle = { display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '1px solid #ccc', paddingBottom: '10px' };
@@ -196,14 +227,34 @@ const CustomerPage = () => {
             </div>
 
             {activeTab === 'products' && (
-                <div style={gridStyle}>
-                    {products.map(p => (
-                        <div key={p.MaSanPham} style={cardStyle}>
-                            <h3>{p.TenSanPham}</h3>
-                            <p>Giá: {p.GiaBan.toLocaleString()} VND</p>
-                            <button onClick={() => addToCart(p)} style={buttonStyle}>Thêm vào giỏ</button>
+                <div>
+                    {suitableProducts.length > 0 && (
+                        <div style={{marginBottom: '30px', padding: '20px', backgroundColor: '#e8f5e9', borderRadius: '8px'}}>
+                            <h3>🐾 Sản phẩm phù hợp cho thú cưng của bạn</h3>
+                            <div style={gridStyle}>
+                                {suitableProducts.map(p => (
+                                    <div key={p.MaSanPham} style={{...cardStyle, borderColor: '#4caf50', borderWidth: '2px'}}>
+                                        <span style={{backgroundColor: '#4caf50', color: 'white', padding: '5px 10px', borderRadius: '4px', fontSize: '12px'}}>Được đề xuất</span>
+                                        <h3>{p.TenSanPham}</h3>
+                                        <p>Giá: {p.GiaBan.toLocaleString()} VND</p>
+                                        <p style={{fontSize: '12px', color: '#555'}}>Phù hợp với: {p.PhuHopVoiLoai}</p>
+                                        <button onClick={() => addToCart(p)} style={buttonStyle}>Thêm vào giỏ</button>
+                                    </div>
+                                ))}
+                            </div>
                         </div>
-                    ))}
+                    )}
+                    
+                    <h3>Tất cả sản phẩm</h3>
+                    <div style={gridStyle}>
+                        {products.map(p => (
+                            <div key={p.MaSanPham} style={cardStyle}>
+                                <h3>{p.TenSanPham}</h3>
+                                <p>Giá: {p.GiaBan.toLocaleString()} VND</p>
+                                <button onClick={() => addToCart(p)} style={buttonStyle}>Thêm vào giỏ</button>
+                            </div>
+                        ))}
+                    </div>
                 </div>
             )}
 
@@ -246,9 +297,31 @@ const CustomerPage = () => {
                                         <h4>{p.TenThuCung}</h4>
                                         <p>Giống: {p.Giong}</p>
                                         <p>Cân nặng: {p.CanNang} kg</p>
+                                        <button 
+                                            onClick={() => handleViewSuitableProducts(p.MaThuCung)} 
+                                            style={{...buttonStyle, backgroundColor: '#9b59b6', marginTop: '10px'}}
+                                        >
+                                            Xem sản phẩm phù hợp
+                                        </button>
                                     </div>
                                 ))}
                             </div>
+                            
+                            {selectedPet && suitableProducts.length > 0 && (
+                                <div style={{marginTop: '30px', padding: '20px', backgroundColor: '#f9f9f9', borderRadius: '8px'}}>
+                                    <h3>Sản phẩm phù hợp cho {selectedPet.TenThuCung}</h3>
+                                    <div style={gridStyle}>
+                                        {suitableProducts.map(sp => (
+                                            <div key={sp.MaSanPham} style={cardStyle}>
+                                                <h4>{sp.TenSanPham}</h4>
+                                                <p>Giá: {sp.GiaBan.toLocaleString()} VND</p>
+                                                <p style={{fontSize: '12px', color: '#7f8c8d'}}>Phù hợp với: {sp.PhuHopVoiLoai}</p>
+                                                <button onClick={() => addToCart(sp)} style={buttonStyle}>Thêm vào giỏ</button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                         <div style={{flex: 1, borderLeft: '1px solid #eee', paddingLeft: '20px'}}>
                             <h3>Đăng ký thú cưng mới</h3>

@@ -13,5 +13,6 @@ cusRouter.post('/appointment', cusController.createAppointment);
 cusRouter.get('/history/:id', cusController.getHistory);
 cusRouter.get('/branches', cusController.getBranches);
 cusRouter.get('/pets/:id', cusController.getCustomerPets);
+cusRouter.get('/suitable-products/:petId', cusController.getSuitableProducts);
 
 export default cusRouter;

@@ -128,6 +128,16 @@ const cusController = {
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
         }
+    },
+
+    getSuitableProducts: async (req, res) => {
+        try {
+            const { petId } = req.params;
+            const products = await CusService.getSuitableProducts(petId);
+            res.json({ success: true, data: products });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
     }
 
 };

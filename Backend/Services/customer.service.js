@@ -273,6 +273,19 @@ async function getCustomerPets(customerId) {
     }
 }
 
+async function getSuitableProducts(petId) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('MaThuCung', sql.UniqueIdentifier, petId)
+            .execute('SP_TimSanPhamPhuHop');
+        return result.recordset;
+    } catch (error) {
+        console.error('[getSuitableProducts] Error:', error.message, error);
+        throw error;
+    }
+}
+
 export default {
     findByPhoneNum,
     getProducts,
@@ -284,5 +297,6 @@ export default {
     createAppointment,
     getHistory,
     getBranches,
-    getCustomerPets
+    getCustomerPets,
+    getSuitableProducts
 };

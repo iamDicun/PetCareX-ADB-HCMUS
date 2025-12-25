@@ -47,7 +47,7 @@ async function search(keyword) {
         const result = await pool.request()
             .input('keyword', sql.NVarChar, `%${keyword}%`)
             .query(`
-                SELECT 'Product' as Type, MaSanPham as ID, TenSanPham as Name, GiaBan as Price, NULL as Description 
+                SELECT 'Product' as Type, MaSanPham as ID, TenSanPham as Name, GiaBan as Price, MoTa as Description 
                 FROM SanPham 
                 WHERE TenSanPham LIKE @keyword AND TrangThai = 1
                 UNION ALL

@@ -120,6 +120,17 @@ const cusController = {
         }
     },
 
+    getAvailableVets: async (req, res) => {
+        try {
+            const { branchId } = req.params;
+            const { appointmentTime } = req.query;
+            const vets = await CusService.getAvailableVets(branchId, appointmentTime);
+            res.json({ success: true, data: vets });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    },
+
     getCustomerPets: async (req, res) => {
         try {
             const { id } = req.params;
@@ -135,6 +146,34 @@ const cusController = {
             const { petId } = req.params;
             const products = await CusService.getSuitableProducts(petId);
             res.json({ success: true, data: products });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    },
+
+    getConfirmedInvoices: async (req, res) => {
+        try {
+            const { id } = req.params;
+            const invoices = await CusService.getConfirmedInvoices(id);
+            res.json({ 
+                success: true, 
+                data: invoices,
+                message: `Tìm thấy ${invoices.length} hóa đơn` 
+            });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    },
+
+    getUpcomingVaccinations: async (req, res) => {
+        try {
+            const { id } = req.params;
+            const vaccinations = await CusService.getUpcomingVaccinations(id);
+            res.json({ 
+                success: true, 
+                data: vaccinations,
+                message: `Tìm thấy ${vaccinations.length} lịch tiêm chủng sắp tới` 
+            });
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
         }

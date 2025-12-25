@@ -127,29 +127,16 @@ async function createOrder(data) {
                 .query('SELECT GiaBan FROM SanPham WHERE MaSanPham = @MaSanPham');
             
             const giaBan = priceResult.recordset[0].GiaBan;
-            const thanhTien = giaBan * item.SoLuong;
 
             await detailRequest
                 .input('MaDonHang', sql.UniqueIdentifier, maDonHang)
                 .input('SoLuong', sql.Int, item.SoLuong)
-                .input('DonGia', sql.Decimal, giaBan)
-                .input('ThanhTien', sql.Decimal, thanhTien)
+                .input('DonGiaBan', sql.Decimal, giaBan)
                 .query(`
-                    INSERT INTO ChiTietDonHang (MaDonHang, MaSanPham, SoLuong, DonGia, ThanhTien)
-                    VALUES (@MaDonHang, @MaSanPham, @SoLuong, @DonGia, @ThanhTien)
+                    INSERT INTO ChiTietDonHang (MaDonHang, MaSanPham, SoLuong, DonGiaBan)
+                    VALUES (@MaDonHang, @MaSanPham, @SoLuong, @DonGiaBan)
                 `);
         }
-
-        // Update Total Amount in DonHang
-        const updateRequest = new sql.Request(transaction);
-        await updateRequest
-            .input('MaDonHang', sql.UniqueIdentifier, maDonHang)
-            .query(`
-                UPDATE DonHang 
-                SET TongTien = (SELECT SUM(ThanhTien) FROM ChiTietDonHang WHERE MaDonHang = @MaDonHang),
-                    TongTienThucTra = (SELECT SUM(ThanhTien) FROM ChiTietDonHang WHERE MaDonHang = @MaDonHang)
-                WHERE MaDonHang = @MaDonHang
-            `);
 
         await transaction.commit();
         return { success: true, maDonHang };
@@ -161,46 +148,89 @@ async function createOrder(data) {
 }
 
 async function createAppointment(data) {
-    // data: { MaKhachHang, MaThuCung, NgayGioHen, MaChiNhanh, DichVu: [MaDichVu] }
+    // data: { MaKhachHang, MaThuCung, NgayGioHen, MaChiNhanh, DichVu: [{ MaDichVu, MaBacSi? }] }
+    console.log('[createAppointment] Starting appointment creation:', JSON.stringify(data, null, 2));
     const pool = await poolPromise;
     const transaction = new sql.Transaction(pool);
     
     try {
         await transaction.begin();
+        console.log('[createAppointment] Transaction started');
+        
+        // Ensure date is in proper format
+        const appointmentDate = new Date(data.NgayGioHen);
+        console.log('[createAppointment] Parsed appointment date:', appointmentDate);
         
         const request = new sql.Request(transaction);
         const apptResult = await request
             .input('MaKhachHang', sql.UniqueIdentifier, data.MaKhachHang)
             .input('MaThuCung', sql.UniqueIdentifier, data.MaThuCung)
-            .input('NgayGioHen', sql.DateTime, data.NgayGioHen)
+            .input('NgayGioHen', sql.DateTime, appointmentDate)
             .input('MaChiNhanh', sql.UniqueIdentifier, data.MaChiNhanh)
             .query(`
-                INSERT INTO LichHen (MaKhachHang, MaThuCung, NgayGioHen, MaChiNhanh, TrangThai, NgayTao)
+                INSERT INTO LichHen (MaKhachHang, MaThuCung, NgayGioHen, MaChiNhanh, TrangThai, KenhDat)
                 OUTPUT INSERTED.MaLichHen
-                VALUES (@MaKhachHang, @MaThuCung, @NgayGioHen, @MaChiNhanh, N'Chờ xác nhận', GETDATE())
+                VALUES (@MaKhachHang, @MaThuCung, @NgayGioHen, @MaChiNhanh, N'Chờ xác nhận', N'Online')
             `);
             
         const maLichHen = apptResult.recordset[0].MaLichHen;
+        console.log('[createAppointment] LichHen created:', maLichHen);
 
-        for (const maDichVu of data.DichVu) {
+        // Get available vets at branch if needed for random assignment
+        const vetsRequest = new sql.Request(transaction);
+        const availableVets = await vetsRequest
+            .input('MaChiNhanh', sql.UniqueIdentifier, data.MaChiNhanh)
+            .query(`
+                SELECT MaNhanVien 
+                FROM NhanVien 
+                WHERE MaChiNhanh = @MaChiNhanh 
+                AND ChucVu = N'Bác sĩ thú y' 
+                AND (NgayNghiViec IS NULL OR NgayNghiViec > GETDATE())
+            `);
+        
+        console.log(`[createAppointment] Found ${availableVets.recordset.length} available vets at branch`);
+
+        for (const dichVu of data.DichVu) {
             const detailRequest = new sql.Request(transaction);
+            
             // Get Service Price
             const priceResult = await detailRequest
-                .input('MaDichVu', sql.UniqueIdentifier, maDichVu)
+                .input('MaDichVu', sql.UniqueIdentifier, dichVu.MaDichVu)
                 .query('SELECT GiaNiemYet FROM DichVu WHERE MaDichVu = @MaDichVu');
             
             const gia = priceResult.recordset[0].GiaNiemYet;
 
+            // Assign vet: use provided MaBacSi or random from available vets
+            let maBacSi = dichVu.MaBacSi;
+            
+            // Handle empty string or null/undefined - treat them all as "no vet selected"
+            if (!maBacSi || maBacSi === '' || maBacSi === 'null' || maBacSi === 'undefined') {
+                if (availableVets.recordset.length > 0) {
+                    const randomIndex = Math.floor(Math.random() * availableVets.recordset.length);
+                    maBacSi = availableVets.recordset[randomIndex].MaNhanVien;
+                    console.log(`[createAppointment] Random vet assigned for service ${dichVu.MaDichVu}:`, maBacSi);
+                } else {
+                    maBacSi = null;
+                    console.log(`[createAppointment] No vet available for service ${dichVu.MaDichVu}`);
+                }
+            } else {
+                console.log(`[createAppointment] Vet selected by user for service ${dichVu.MaDichVu}:`, maBacSi);
+            }
+
+            console.log(`[createAppointment] Inserting ChiTietLichHen - Service: ${dichVu.MaDichVu}, Vet: ${maBacSi}, Price: ${gia}`);
             await detailRequest
                 .input('MaLichHen', sql.UniqueIdentifier, maLichHen)
-                .input('DonGiaDuKien', sql.Decimal, gia)
+                .input('MaBacSi', maBacSi ? sql.UniqueIdentifier : sql.VarChar, maBacSi)
+                .input('DonGiaThucTe', sql.Decimal, gia)
                 .query(`
-                    INSERT INTO ChiTietLichHen (MaLichHen, MaDichVu, DonGiaDuKien)
-                    VALUES (@MaLichHen, @MaDichVu, @DonGiaDuKien)
+                    INSERT INTO ChiTietLichHen (MaLichHen, MaDichVu, MaBacSi, DonGiaThucTe)
+                    VALUES (@MaLichHen, @MaDichVu, @MaBacSi, @DonGiaThucTe)
                 `);
         }
 
+        console.log(`[createAppointment] All services inserted successfully. Committing transaction...`);
         await transaction.commit();
+        console.log('[createAppointment] Appointment created successfully:', maLichHen);
         return { success: true, maLichHen };
     } catch (error) {
         await transaction.rollback();
@@ -260,6 +290,37 @@ async function getBranches() {
     }
 }
 
+async function getAvailableVets(branchId, appointmentTime) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('MaChiNhanh', sql.UniqueIdentifier, branchId)
+            .input('NgayGioHen', sql.DateTime, appointmentTime)
+            .query(`
+                SELECT 
+                    NV.MaNhanVien,
+                    NV.HoTen
+                FROM NhanVien NV
+                WHERE NV.MaChiNhanh = @MaChiNhanh
+                AND NV.ChucVu = N'Bác sĩ thú y'
+                AND (NV.NgayNghiViec IS NULL OR NV.NgayNghiViec > GETDATE())
+                AND NV.MaNhanVien NOT IN (
+                    SELECT DISTINCT CTL.MaBacSi
+                    FROM ChiTietLichHen CTL
+                    INNER JOIN LichHen LH ON CTL.MaLichHen = LH.MaLichHen
+                    WHERE LH.MaChiNhanh = @MaChiNhanh
+                    AND LH.TrangThai IN (N'Chờ xác nhận', N'Đã xác nhận')
+                    AND ABS(DATEDIFF(MINUTE, LH.NgayGioHen, @NgayGioHen)) < 120
+                    AND CTL.MaBacSi IS NOT NULL
+                )
+            `);
+        return result.recordset;
+    } catch (error) {
+        console.error('[getAvailableVets] Error:', error.message, error);
+        throw error;
+    }
+}
+
 async function getCustomerPets(customerId) {
     try {
         const pool = await poolPromise;
@@ -269,6 +330,38 @@ async function getCustomerPets(customerId) {
         return result.recordset;
     } catch (error) {
         console.error('[getCustomerPets] Error:', error.message, error);
+        throw error;
+    }
+}
+
+async function getUpcomingVaccinations(customerId) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('MaKhachHang', sql.UniqueIdentifier, customerId)
+            .query(`
+                SELECT 
+                    LST.MaLichSuTiem,
+                    LST.NgayTiem,
+                    LST.NgayTaiChung,
+                    LST.SoLoVacXin,
+                    TC.TenThuCung,
+                    TC.MaThuCung,
+                    DV.TenDichVu,
+                    NV.HoTen as BacSi,
+                    DATEDIFF(DAY, GETDATE(), LST.NgayTaiChung) as SoNgayConLai
+                FROM LichSuTiem LST
+                INNER JOIN ThuCung TC ON LST.MaThuCung = TC.MaThuCung
+                LEFT JOIN DichVu DV ON LST.MaDichVu = DV.MaDichVu
+                LEFT JOIN NhanVien NV ON LST.MaBacSi = NV.MaNhanVien
+                WHERE TC.MaKhachHang = @MaKhachHang
+                AND LST.NgayTaiChung IS NOT NULL
+                AND LST.NgayTaiChung >= GETDATE()
+                ORDER BY LST.NgayTaiChung ASC
+            `);
+        return result.recordset;
+    } catch (error) {
+        console.error('[getUpcomingVaccinations] Error:', error.message, error);
         throw error;
     }
 }
@@ -286,6 +379,75 @@ async function getSuitableProducts(petId) {
     }
 }
 
+async function getConfirmedInvoices(customerId) {
+    try {
+        const pool = await poolPromise;
+        
+        // Lấy hóa đơn từ đơn hàng có trạng thái "Sẵn sàng để lấy" hoặc "Đã xác nhận"
+        const orderInvoices = await pool.request()
+            .input('MaKhachHang', sql.UniqueIdentifier, customerId)
+            .query(`
+                SELECT DISTINCT
+                    HD.MaHoaDon,
+                    HD.NgayTao,
+                    DH.NgayDat as NgayGiaoDich,
+                    HD.TongPhu,
+                    HD.TongTienGiam,
+                    HD.DiemLoyaltySuDung,
+                    HD.TienGiamTuDiem,
+                    HD.TongTienThucTra,
+                    DH.MaDonHang as MaGiaoDich,
+                    DH.TrangThai,
+                    N'Đơn hàng' as LoaiGiaoDich,
+                    CN.TenChiNhanh,
+                    NV.HoTen as NhanVienXuLy
+                FROM DonHang DH
+                LEFT JOIN HoaDon HD ON DH.MaHoaDon = HD.MaHoaDon
+                LEFT JOIN ChiNhanh CN ON DH.MaChiNhanh = CN.MaChiNhanh
+                LEFT JOIN NhanVien NV ON DH.MaNhanVienSale = NV.MaNhanVien
+                WHERE DH.MaKhachHang = @MaKhachHang
+                AND DH.TrangThai IN (N'Sẵn sàng để lấy', N'Đã xác nhận')
+                AND HD.MaHoaDon IS NOT NULL
+            `);
+        
+        // Lấy hóa đơn từ lịch hẹn có trạng thái "Đã xác nhận"
+        const appointmentInvoices = await pool.request()
+            .input('MaKhachHang', sql.UniqueIdentifier, customerId)
+            .query(`
+                SELECT DISTINCT
+                    HD.MaHoaDon,
+                    HD.NgayTao,
+                    LH.NgayGioHen as NgayGiaoDich,
+                    HD.TongPhu,
+                    HD.TongTienGiam,
+                    HD.DiemLoyaltySuDung,
+                    HD.TienGiamTuDiem,
+                    HD.TongTienThucTra,
+                    LH.MaLichHen as MaGiaoDich,
+                    LH.TrangThai,
+                    N'Lịch hẹn' as LoaiGiaoDich,
+                    CN.TenChiNhanh,
+                    NV.HoTen as NhanVienXuLy
+                FROM LichHen LH
+                LEFT JOIN HoaDon HD ON LH.MaHoaDon = HD.MaHoaDon
+                LEFT JOIN ChiNhanh CN ON LH.MaChiNhanh = CN.MaChiNhanh
+                LEFT JOIN NhanVien NV ON LH.MaNVTao = NV.MaNhanVien
+                WHERE LH.MaKhachHang = @MaKhachHang
+                AND LH.TrangThai = N'Đã xác nhận'
+                AND HD.MaHoaDon IS NOT NULL
+            `);
+        
+        // Gộp kết quả và sắp xếp theo ngày giao dịch
+        const allInvoices = [...orderInvoices.recordset, ...appointmentInvoices.recordset]
+            .sort((a, b) => new Date(b.NgayGiaoDich) - new Date(a.NgayGiaoDich));
+        
+        return allInvoices;
+    } catch (error) {
+        console.error('[getConfirmedInvoices] Error:', error.message, error);
+        throw error;
+    }
+}
+
 export default {
     findByPhoneNum,
     getProducts,
@@ -297,6 +459,9 @@ export default {
     createAppointment,
     getHistory,
     getBranches,
+    getAvailableVets,
     getCustomerPets,
-    getSuitableProducts
+    getSuitableProducts,
+    getConfirmedInvoices,
+    getUpcomingVaccinations
 };

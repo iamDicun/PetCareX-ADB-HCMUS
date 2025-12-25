@@ -16,13 +16,16 @@ const CustomerPage = () => {
     const [branches, setBranches] = useState([]);
     const [selectedPet, setSelectedPet] = useState(null);
     const [suitableProducts, setSuitableProducts] = useState([]);
+    const [invoices, setInvoices] = useState([]);
+    const [availableVets, setAvailableVets] = useState([]);
+    const [vaccinations, setVaccinations] = useState([]);
 
     // Forms state
     const [newPet, setNewPet] = useState({
         TenThuCung: '', Giong: '', NgaySinh: '', GioiTinh: 'Đực', CanNang: '', TinhTrangSK: '', MaLoaiTC: ''
     });
     const [booking, setBooking] = useState({
-        MaChiNhanh: '', MaThuCung: '', NgayGioHen: '', DichVu: []
+        MaChiNhanh: '', MaThuCung: '', NgayGioHen: '', DichVu: [] // Array of {MaDichVu, MaBacSi}
     });
     const [cart, setCart] = useState([]);
 
@@ -33,6 +36,12 @@ const CustomerPage = () => {
         }
         fetchData();
     }, [user]);
+
+    useEffect(() => {
+        if (booking.MaChiNhanh && booking.NgayGioHen) {
+            fetchAvailableVets(booking.MaChiNhanh, booking.NgayGioHen);
+        }
+    }, [booking.MaChiNhanh, booking.NgayGioHen]);
 
     const fetchData = async () => {
         try {
@@ -70,6 +79,44 @@ const CustomerPage = () => {
 
         } catch (error) {
             console.error("Error fetching data:", error);
+        }
+    };
+
+    const fetchInvoices = async () => {
+        try {
+            const res = await fetch(`http://localhost:5000/api/customer/invoices/confirmed/${user.MaKhachHang}`);
+            const data = await res.json();
+            if (data.success) {
+                setInvoices(data.data);
+            }
+        } catch (error) {
+            console.error('Error fetching invoices:', error);
+        }
+    };
+
+    const fetchAvailableVets = async (branchId, appointmentTime) => {
+        if (!branchId || !appointmentTime) return;
+        try {
+            const res = await fetch(`http://localhost:5000/api/customer/branches/${branchId}/available-vets?appointmentTime=${appointmentTime}`);
+            const data = await res.json();
+            if (data.success) {
+                setAvailableVets(data.data);
+            }
+        } catch (error) {
+            console.error('Error fetching vets:', error);
+            setAvailableVets([]);
+        }
+    };
+
+    const fetchVaccinations = async () => {
+        try {
+            const res = await fetch(`http://localhost:5000/api/customer/vaccinations/upcoming/${user.MaKhachHang}`);
+            const data = await res.json();
+            if (data.success) {
+                setVaccinations(data.data);
+            }
+        } catch (error) {
+            console.error('Error fetching vaccinations:', error);
         }
     };
 
@@ -168,11 +215,19 @@ const CustomerPage = () => {
     };
 
     const toggleServiceSelection = (serviceId) => {
-        if (booking.DichVu.includes(serviceId)) {
-            setBooking({ ...booking, DichVu: booking.DichVu.filter(id => id !== serviceId) });
+        const existingIndex = booking.DichVu.findIndex(s => s.MaDichVu === serviceId);
+        if (existingIndex >= 0) {
+            setBooking({ ...booking, DichVu: booking.DichVu.filter((_, idx) => idx !== existingIndex) });
         } else {
-            setBooking({ ...booking, DichVu: [...booking.DichVu, serviceId] });
+            setBooking({ ...booking, DichVu: [...booking.DichVu, { MaDichVu: serviceId, MaBacSi: null }] });
         }
+    };
+
+    const updateServiceVet = (serviceId, vetId) => {
+        setBooking({
+            ...booking,
+            DichVu: booking.DichVu.map(s => s.MaDichVu === serviceId ? { ...s, MaBacSi: vetId || null } : s)
+        });
     };
 
     const handleViewSuitableProducts = async (petId) => {
@@ -223,6 +278,8 @@ const CustomerPage = () => {
                 <div style={tabStyle(activeTab === 'pets')} onClick={() => setActiveTab('pets')}>Thú cưng</div>
                 <div style={tabStyle(activeTab === 'booking')} onClick={() => setActiveTab('booking')}>Đặt lịch</div>
                 <div style={tabStyle(activeTab === 'history')} onClick={() => setActiveTab('history')}>Lịch sử</div>
+                <div style={tabStyle(activeTab === 'vaccines')} onClick={() => { setActiveTab('vaccines'); fetchVaccinations(); }}>💉 Tiêm chủng</div>
+                <div style={tabStyle(activeTab === 'invoices')} onClick={() => { setActiveTab('invoices'); fetchInvoices(); }}>Hóa đơn</div>
                 <div style={tabStyle(activeTab === 'cart')} onClick={() => setActiveTab('cart')}>Giỏ hàng ({cart.reduce((acc, item) => acc + item.SoLuong, 0)})</div>
             </div>
 
@@ -237,6 +294,7 @@ const CustomerPage = () => {
                                         <span style={{backgroundColor: '#4caf50', color: 'white', padding: '5px 10px', borderRadius: '4px', fontSize: '12px'}}>Được đề xuất</span>
                                         <h3>{p.TenSanPham}</h3>
                                         <p>Giá: {p.GiaBan.toLocaleString()} VND</p>
+                                        {p.MoTa && <p style={{fontSize: '13px', color: '#666', marginTop: '8px'}}>{p.MoTa}</p>}
                                         <p style={{fontSize: '12px', color: '#555'}}>Phù hợp với: {p.PhuHopVoiLoai}</p>
                                         <button onClick={() => addToCart(p)} style={buttonStyle}>Thêm vào giỏ</button>
                                     </div>
@@ -251,6 +309,7 @@ const CustomerPage = () => {
                             <div key={p.MaSanPham} style={cardStyle}>
                                 <h3>{p.TenSanPham}</h3>
                                 <p>Giá: {p.GiaBan.toLocaleString()} VND</p>
+                                {p.MoTa && <p style={{fontSize: '13px', color: '#666', marginTop: '8px', marginBottom: '10px'}}>{p.MoTa}</p>}
                                 <button onClick={() => addToCart(p)} style={buttonStyle}>Thêm vào giỏ</button>
                             </div>
                         ))}
@@ -361,19 +420,47 @@ const CustomerPage = () => {
                         <input style={inputStyle} type="datetime-local" value={booking.NgayGioHen} onChange={e => setBooking({...booking, NgayGioHen: e.target.value})} required />
                         
                         <h4>Chọn dịch vụ:</h4>
-                        <div style={{maxHeight: '200px', overflowY: 'auto', border: '1px solid #eee', padding: '10px'}}>
-                            {services.map(s => (
-                                <div key={s.MaDichVu} style={{marginBottom: '5px'}}>
-                                    <label>
-                                        <input 
-                                            type="checkbox" 
-                                            checked={booking.DichVu.includes(s.MaDichVu)}
-                                            onChange={() => toggleServiceSelection(s.MaDichVu)}
-                                        />
-                                        {s.TenDichVu} - {s.GiaNiemYet.toLocaleString()} VND
-                                    </label>
-                                </div>
-                            ))}
+                        <div style={{maxHeight: '400px', overflowY: 'auto', border: '1px solid #eee', padding: '10px'}}>
+                            {services.map(s => {
+                                const selectedService = booking.DichVu.find(d => d.MaDichVu === s.MaDichVu);
+                                return (
+                                    <div key={s.MaDichVu} style={{marginBottom: '15px', padding: '10px', backgroundColor: selectedService ? '#e3f2fd' : 'transparent', borderRadius: '5px'}}>
+                                        <label style={{display: 'flex', alignItems: 'center', gap: '10px'}}>
+                                            <input 
+                                                type="checkbox" 
+                                                checked={!!selectedService}
+                                                onChange={() => toggleServiceSelection(s.MaDichVu)}
+                                            />
+                                            <span style={{fontWeight: 'bold'}}>{s.TenDichVu}</span>
+                                            <span style={{color: '#666'}}>- {s.GiaNiemYet.toLocaleString()} VND</span>
+                                        </label>
+                                        
+                                        {selectedService && availableVets.length > 0 && (
+                                            <div style={{marginTop: '10px', marginLeft: '30px'}}>
+                                                <label style={{fontSize: '14px', color: '#555'}}>Chọn bác sĩ (tùy chọn):</label>
+                                                <select 
+                                                    style={{...inputStyle, marginTop: '5px', width: '100%'}}
+                                                    value={selectedService.MaBacSi || ''}
+                                                    onChange={(e) => updateServiceVet(s.MaDichVu, e.target.value)}
+                                                >
+                                                    <option value="">Ngẫu nhiên</option>
+                                                    {availableVets.map(v => (
+                                                        <option key={v.MaNhanVien} value={v.MaNhanVien}>
+                                                            {v.HoTen}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        )}
+                                        
+                                        {selectedService && availableVets.length === 0 && booking.MaChiNhanh && booking.NgayGioHen && (
+                                            <div style={{marginTop: '5px', marginLeft: '30px', fontSize: '12px', color: '#ff9800'}}>
+                                                ⚠️ Không có bác sĩ khả dụng tại thời điểm này
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
                         </div>
 
                         <button type="submit" style={buttonStyle}>Đặt lịch</button>
@@ -424,6 +511,119 @@ const CustomerPage = () => {
                             ))}
                         </tbody>
                     </table>
+                </div>
+            )}
+
+            {activeTab === 'vaccines' && (
+                <div>
+                    <h3>💉 Lịch tiêm chủng sắp tới</h3>
+                    <p style={{color: '#666', marginBottom: '20px'}}>Nhắc nhở các mũi tiêm chủng sắp đến hạn cho thú cưng của bạn</p>
+                    {vaccinations.length === 0 ? (
+                        <div style={{textAlign: 'center', padding: '40px', color: '#999'}}>
+                            <p>✅ Không có lịch tiêm chủng sắp tới</p>
+                        </div>
+                    ) : (
+                        <div style={gridStyle}>
+                            {vaccinations.map((vac, idx) => {
+                                const daysLeft = vac.SoNgayConLai;
+                                const isUrgent = daysLeft <= 7;
+                                const isWarning = daysLeft > 7 && daysLeft <= 14;
+                                
+                                return (
+                                    <div key={idx} style={{
+                                        ...cardStyle, 
+                                        borderLeft: `5px solid ${isUrgent ? '#e74c3c' : isWarning ? '#f39c12' : '#3498db'}`,
+                                        backgroundColor: isUrgent ? '#ffebee' : isWarning ? '#fff3e0' : '#e3f2fd'
+                                    }}>
+                                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '10px'}}>
+                                            <h4 style={{margin: 0}}>{vac.TenThuCung}</h4>
+                                            <span style={{
+                                                backgroundColor: isUrgent ? '#e74c3c' : isWarning ? '#f39c12' : '#3498db',
+                                                color: 'white',
+                                                padding: '3px 8px',
+                                                borderRadius: '4px',
+                                                fontSize: '12px',
+                                                fontWeight: 'bold'
+                                            }}>
+                                                {daysLeft === 0 ? 'HÔM NAY' : daysLeft === 1 ? 'NGÀY MAI' : `${daysLeft} ngày nữa`}
+                                            </span>
+                                        </div>
+                                        <div style={{fontSize: '14px', color: '#555', marginBottom: '5px'}}>
+                                            <strong>Dịch vụ:</strong> {vac.TenDichVu || 'Tiêm chủng'}
+                                        </div>
+                                        <div style={{fontSize: '14px', color: '#555', marginBottom: '5px'}}>
+                                            <strong>Số lô vaccine:</strong> {vac.SoLoVacXin || 'N/A'}
+                                        </div>
+                                        <div style={{fontSize: '14px', color: '#555', marginBottom: '5px'}}>
+                                            <strong>Ngày tiêm gần nhất:</strong> {new Date(vac.NgayTiem).toLocaleDateString()}
+                                        </div>
+                                        <div style={{fontSize: '14px', color: '#555', marginBottom: '5px'}}>
+                                            <strong>Ngày tiêm tiếp theo:</strong> {new Date(vac.NgayTaiChung).toLocaleDateString()}
+                                        </div>
+                                        {vac.BacSi && (
+                                            <div style={{fontSize: '14px', color: '#555', marginBottom: '10px'}}>
+                                                <strong>Bác sĩ:</strong> {vac.BacSi}
+                                            </div>
+                                        )}
+                                        {isUrgent && (
+                                            <div style={{marginTop: '10px', padding: '8px', backgroundColor: '#fff', borderRadius: '4px', fontSize: '13px', color: '#c0392b', fontWeight: 'bold'}}>
+                                                ⚠️ Vui lòng đặt lịch hẹn sớm!
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {activeTab === 'invoices' && (
+                <div>
+                    <h3>🧾 Hóa đơn đã xác nhận</h3>
+                    <p style={{color: '#666', marginBottom: '20px'}}>Danh sách hóa đơn từ đơn hàng và lịch hẹn đã được xác nhận hoặc sẵn sàng để lấy</p>
+                    {invoices.length === 0 ? (
+                        <div style={{textAlign: 'center', padding: '40px', color: '#999'}}>
+                            <p>Chưa có hóa đơn nào</p>
+                        </div>
+                    ) : (
+                        <div style={gridStyle}>
+                            {invoices.map((invoice, idx) => (
+                                <div key={idx} style={{...cardStyle, borderLeft: '4px solid #2ecc71'}}>
+                                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '10px'}}>
+                                        <h4 style={{margin: 0}}>Hóa đơn #{invoice.MaHoaDon.substring(0, 8)}</h4>
+                                        <span style={{backgroundColor: invoice.LoaiGiaoDich === 'Đơn hàng' ? '#3498db' : '#9b59b6', color: 'white', padding: '3px 8px', borderRadius: '4px', fontSize: '12px'}}>
+                                            {invoice.LoaiGiaoDich}
+                                        </span>
+                                    </div>
+                                    <div style={{fontSize: '14px', color: '#555', marginBottom: '5px'}}>
+                                        <strong>Chi nhánh:</strong> {invoice.TenChiNhanh}
+                                    </div>
+                                    <div style={{fontSize: '14px', color: '#555', marginBottom: '5px'}}>
+                                        <strong>Nhân viên:</strong> {invoice.NhanVienXuLy || 'Chưa xác định'}
+                                    </div>
+                                    <div style={{fontSize: '14px', color: '#555', marginBottom: '5px'}}>
+                                        <strong>Ngày:</strong> {new Date(invoice.NgayGiaoDich).toLocaleString()}
+                                    </div>
+                                    <div style={{fontSize: '14px', color: '#555', marginBottom: '10px'}}>
+                                        <strong>Trạng thái:</strong> <span style={{color: '#27ae60', fontWeight: 'bold'}}>{invoice.TrangThai}</span>
+                                    </div>
+                                    <div style={{borderTop: '1px solid #eee', paddingTop: '10px', marginTop: '10px'}}>
+                                        <div style={{fontSize: '13px', color: '#777', marginBottom: '3px'}}>Tổng phụ: {invoice.TongPhu.toLocaleString()} VND</div>
+                                        {invoice.TongTienGiam > 0 && (
+                                            <div style={{fontSize: '13px', color: '#e74c3c', marginBottom: '3px'}}>Giảm giá: -{invoice.TongTienGiam.toLocaleString()} VND</div>
+                                        )}
+                                        {invoice.DiemLoyaltySuDung > 0 && (
+                                            <div style={{fontSize: '13px', color: '#f39c12', marginBottom: '3px'}}>Điểm loyalty: {invoice.DiemLoyaltySuDung} điểm (-{invoice.TienGiamTuDiem.toLocaleString()} VND)</div>
+                                        )}
+                                        <div style={{fontSize: '16px', fontWeight: 'bold', color: '#2ecc71', marginTop: '8px'}}>
+                                            Tổng thanh toán: {invoice.TongTienThucTra.toLocaleString()} VND
+                                        </div>
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             )}
         </div>

@@ -12,7 +12,10 @@ cusRouter.post('/order', cusController.createOrder);
 cusRouter.post('/appointment', cusController.createAppointment);
 cusRouter.get('/history/:id', cusController.getHistory);
 cusRouter.get('/branches', cusController.getBranches);
+cusRouter.get('/branches/:branchId/available-vets', cusController.getAvailableVets);
 cusRouter.get('/pets/:id', cusController.getCustomerPets);
 cusRouter.get('/suitable-products/:petId', cusController.getSuitableProducts);
+cusRouter.get('/invoices/confirmed/:id', cusController.getConfirmedInvoices);
+cusRouter.get('/vaccinations/upcoming/:id', cusController.getUpcomingVaccinations);
 
 export default cusRouter;

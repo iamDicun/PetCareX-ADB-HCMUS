@@ -177,6 +177,26 @@ const cusController = {
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
         }
+    },
+
+    getAppointmentDetails: async (req, res) => {
+        try {
+            const { appointmentId } = req.params;
+            const details = await CusService.getAppointmentDetails(appointmentId);
+            res.json({ success: true, data: details });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
+    },
+
+    getOrderDetails: async (req, res) => {
+        try {
+            const { orderId } = req.params;
+            const details = await CusService.getOrderDetails(orderId);
+            res.json({ success: true, data: details });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
     }
 
 };

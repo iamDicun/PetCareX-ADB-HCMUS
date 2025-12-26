@@ -17,5 +17,7 @@ cusRouter.get('/pets/:id', cusController.getCustomerPets);
 cusRouter.get('/suitable-products/:petId', cusController.getSuitableProducts);
 cusRouter.get('/invoices/confirmed/:id', cusController.getConfirmedInvoices);
 cusRouter.get('/vaccinations/upcoming/:id', cusController.getUpcomingVaccinations);
+cusRouter.get('/appointment/:appointmentId/details', cusController.getAppointmentDetails);
+cusRouter.get('/order/:orderId/details', cusController.getOrderDetails);
 
 export default cusRouter;

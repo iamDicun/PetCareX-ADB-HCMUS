@@ -106,14 +106,24 @@ async function createOrder(data) {
         
         // Create Order
         const request = new sql.Request(transaction);
-        const orderResult = await request
+        await request
             .input('MaKhachHang', sql.UniqueIdentifier, data.MaKhachHang)
             .input('MaChiNhanh', sql.UniqueIdentifier, data.MaChiNhanh)
             .input('LoaiDon', sql.NVarChar, 'Online')
             .query(`
                 INSERT INTO DonHang (MaKhachHang, MaChiNhanh, LoaiDon, TrangThai, NgayDat)
-                OUTPUT INSERTED.MaDonHang
-                VALUES (@MaKhachHang, @MaChiNhanh, @LoaiDon, N'Chờ xác nhận', GETDATE())
+                VALUES (@MaKhachHang, @MaChiNhanh, @LoaiDon, N'Chờ xử lý', GETDATE())
+            `);
+            
+        // Get the inserted order ID
+        const orderIdRequest = new sql.Request(transaction);
+        const orderResult = await orderIdRequest
+            .input('MaKhachHang', sql.UniqueIdentifier, data.MaKhachHang)
+            .query(`
+                SELECT TOP 1 MaDonHang 
+                FROM DonHang 
+                WHERE MaKhachHang = @MaKhachHang 
+                ORDER BY NgayDat DESC
             `);
             
         const maDonHang = orderResult.recordset[0].MaDonHang;
@@ -282,7 +292,7 @@ async function getHistory(customerId) {
 async function getBranches() {
     try {
         const pool = await poolPromise;
-        const result = await pool.request().query('SELECT MaChiNhanh, TenChiNhanh FROM ChiNhanh WHERE TrangThai = N\'Hoạt động\'');
+        const result = await pool.request().query('SELECT MaChiNhanh, TenChiNhanh, DiaChi FROM ChiNhanh WHERE TrangThai = N\'Hoạt động\'');
         return result.recordset;
     } catch (error) {
         console.error('[getBranches] Error:', error.message, error);
@@ -406,7 +416,6 @@ async function getConfirmedInvoices(customerId) {
                 LEFT JOIN ChiNhanh CN ON DH.MaChiNhanh = CN.MaChiNhanh
                 LEFT JOIN NhanVien NV ON DH.MaNhanVienSale = NV.MaNhanVien
                 WHERE DH.MaKhachHang = @MaKhachHang
-                AND DH.TrangThai IN (N'Sẵn sàng để lấy', N'Đã xác nhận')
                 AND HD.MaHoaDon IS NOT NULL
             `);
         
@@ -448,6 +457,84 @@ async function getConfirmedInvoices(customerId) {
     }
 }
 
+async function getAppointmentDetails(appointmentId) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('appointmentId', sql.UniqueIdentifier, appointmentId)
+            .query(`
+                SELECT 
+                    lh.MaLichHen,
+                    lh.NgayGioHen,
+                    lh.TrangThai,
+                    cn.TenChiNhanh,
+                    cn.DiaChi AS DiaChiChiNhanh,
+                    tc.TenThuCung,
+                    ltc.TenLoai AS LoaiThuCung,
+                    tc.Giong,
+                    tc.CanNang,
+                    STRING_AGG(dv.TenDichVu, ', ') AS DichVu,
+                    STRING_AGG(nv.HoTen, ', ') AS BacSi,
+                    hsk.TrieuChung,
+                    hsk.ChuanDoan,
+                    hsk.NgayTaiKham,
+                    CASE 
+                        WHEN STRING_AGG(ctlh.KetQua, '') IS NULL THEN N'Trống'
+                        ELSE STRING_AGG(ISNULL(ctlh.KetQua, ''), ' | ')
+                    END AS KetQua
+                FROM LichHen lh
+                JOIN ChiNhanh cn ON cn.MaChiNhanh = lh.MaChiNhanh
+                JOIN ThuCung tc ON tc.MaThuCung = lh.MaThuCung
+                JOIN LoaiThuCung ltc ON ltc.MaLoaiTC = tc.MaLoaiTC
+                JOIN ChiTietLichHen ctlh ON ctlh.MaLichHen = lh.MaLichHen
+                JOIN DichVu dv ON dv.MaDichVu = ctlh.MaDichVu
+                LEFT JOIN NhanVien nv ON nv.MaNhanVien = ctlh.MaBacSi
+                LEFT JOIN HoSoKham hsk ON hsk.MaLichHen = lh.MaLichHen
+                WHERE lh.MaLichHen = @appointmentId
+                GROUP BY 
+                    lh.MaLichHen, lh.NgayGioHen, lh.TrangThai,
+                    cn.TenChiNhanh, cn.DiaChi,
+                    tc.TenThuCung, ltc.TenLoai, tc.Giong, tc.CanNang,
+                    hsk.TrieuChung, hsk.ChuanDoan, hsk.NgayTaiKham
+            `);
+        return result.recordset[0];
+    } catch (error) {
+        console.error('[getAppointmentDetails] Error:', error.message, error);
+        throw error;
+    }
+}
+
+async function getOrderDetails(orderId) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('orderId', sql.UniqueIdentifier, orderId)
+            .query(`
+                SELECT 
+                    dh.MaDonHang,
+                    dh.NgayDat,
+                    dh.TrangThai,
+                    dh.LoaiDon,
+                    cn.TenChiNhanh,
+                    cn.DiaChi AS DiaChiChiNhanh,
+                    ctdh.MaSanPham,
+                    sp.TenSanPham,
+                    ctdh.SoLuong,
+                    ctdh.DonGiaBan,
+                    (ctdh.SoLuong * ctdh.DonGiaBan) AS ThanhTien
+                FROM DonHang dh
+                JOIN ChiNhanh cn ON cn.MaChiNhanh = dh.MaChiNhanh
+                JOIN ChiTietDonHang ctdh ON ctdh.MaDonHang = dh.MaDonHang
+                JOIN SanPham sp ON sp.MaSanPham = ctdh.MaSanPham
+                WHERE dh.MaDonHang = @orderId
+            `);
+        return result.recordset;
+    } catch (error) {
+        console.error('[getOrderDetails] Error:', error.message, error);
+        throw error;
+    }
+}
+
 export default {
     findByPhoneNum,
     getProducts,
@@ -463,5 +550,7 @@ export default {
     getCustomerPets,
     getSuitableProducts,
     getConfirmedInvoices,
-    getUpcomingVaccinations
+    getUpcomingVaccinations,
+    getAppointmentDetails,
+    getOrderDetails
 };

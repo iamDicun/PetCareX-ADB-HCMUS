@@ -18,7 +18,10 @@ const CustomerPage = () => {
     const [suitableProducts, setSuitableProducts] = useState([]);
     const [invoices, setInvoices] = useState([]);
     const [availableVets, setAvailableVets] = useState([]);
-    const [vaccinations, setVaccinations] = useState([]);
+    const [showHistoryDetails, setShowHistoryDetails] = useState(false);
+    const [selectedHistoryItem, setSelectedHistoryItem] = useState(null);
+    const [showCheckoutModal, setShowCheckoutModal] = useState(false);
+    const [checkoutBranch, setCheckoutBranch] = useState('');
 
     // Forms state
     const [newPet, setNewPet] = useState({
@@ -27,7 +30,17 @@ const CustomerPage = () => {
     const [booking, setBooking] = useState({
         MaChiNhanh: '', MaThuCung: '', NgayGioHen: '', DichVu: [] // Array of {MaDichVu, MaBacSi}
     });
-    const [cart, setCart] = useState([]);
+    
+    // Initialize cart from localStorage
+    const [cart, setCart] = useState(() => {
+        const savedCart = localStorage.getItem('petcareCart');
+        return savedCart ? JSON.parse(savedCart) : [];
+    });
+
+    // Save cart to localStorage whenever it changes
+    useEffect(() => {
+        localStorage.setItem('petcareCart', JSON.stringify(cart));
+    }, [cart]);
 
     useEffect(() => {
         if (!user) {
@@ -108,15 +121,31 @@ const CustomerPage = () => {
         }
     };
 
-    const fetchVaccinations = async () => {
-        try {
-            const res = await fetch(`http://localhost:5000/api/customer/vaccinations/upcoming/${user.MaKhachHang}`);
-            const data = await res.json();
-            if (data.success) {
-                setVaccinations(data.data);
+    const handleViewHistoryDetails = async (historyItem) => {
+        if (historyItem.Type === 'Appointment') {
+            try {
+                const res = await fetch(`http://localhost:5000/api/customer/appointment/${historyItem.ID}/details`);
+                const data = await res.json();
+                if (data.success) {
+                    setSelectedHistoryItem({ ...data.data, Type: 'Appointment' });
+                    setShowHistoryDetails(true);
+                }
+            } catch (error) {
+                console.error('Error fetching appointment details:', error);
+                alert('Không thể tải chi tiết lịch hẹn');
             }
-        } catch (error) {
-            console.error('Error fetching vaccinations:', error);
+        } else if (historyItem.Type === 'Order') {
+            try {
+                const res = await fetch(`http://localhost:5000/api/customer/order/${historyItem.ID}/details`);
+                const data = await res.json();
+                if (data.success) {
+                    setSelectedHistoryItem({ items: data.data, Type: 'Order' });
+                    setShowHistoryDetails(true);
+                }
+            } catch (error) {
+                console.error('Error fetching order details:', error);
+                alert('Không thể tải chi tiết đơn hàng');
+            }
         }
     };
 
@@ -167,8 +196,14 @@ const CustomerPage = () => {
 
     const handleCheckout = async () => {
         if (cart.length === 0) return;
-        const maChiNhanh = prompt("Nhập ID Chi nhánh (hoặc chọn từ danh sách - demo nhập tay):", branches[0]?.MaChiNhanh);
-        if (!maChiNhanh) return;
+        setShowCheckoutModal(true);
+    };
+
+    const confirmCheckout = async () => {
+        if (!checkoutBranch) {
+            alert('Vui lòng chọn chi nhánh');
+            return;
+        }
 
         try {
             const res = await fetch('http://localhost:5000/api/customer/order', {
@@ -176,7 +211,7 @@ const CustomerPage = () => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     MaKhachHang: user.MaKhachHang,
-                    MaChiNhanh: maChiNhanh,
+                    MaChiNhanh: checkoutBranch,
                     ChiTiet: cart.map(item => ({ MaSanPham: item.MaSanPham, SoLuong: item.SoLuong }))
                 })
             });
@@ -184,12 +219,15 @@ const CustomerPage = () => {
             if (data.success) {
                 alert('Đặt hàng thành công!');
                 setCart([]);
+                setShowCheckoutModal(false);
+                setCheckoutBranch('');
                 fetchData();
             } else {
                 alert(data.message);
             }
         } catch (error) {
             console.error("Checkout error:", error);
+            alert('Lỗi khi đặt hàng');
         }
     };
 
@@ -278,7 +316,6 @@ const CustomerPage = () => {
                 <div style={tabStyle(activeTab === 'pets')} onClick={() => setActiveTab('pets')}>Thú cưng</div>
                 <div style={tabStyle(activeTab === 'booking')} onClick={() => setActiveTab('booking')}>Đặt lịch</div>
                 <div style={tabStyle(activeTab === 'history')} onClick={() => setActiveTab('history')}>Lịch sử</div>
-                <div style={tabStyle(activeTab === 'vaccines')} onClick={() => { setActiveTab('vaccines'); fetchVaccinations(); }}>💉 Tiêm chủng</div>
                 <div style={tabStyle(activeTab === 'invoices')} onClick={() => { setActiveTab('invoices'); fetchInvoices(); }}>Hóa đơn</div>
                 <div style={tabStyle(activeTab === 'cart')} onClick={() => setActiveTab('cart')}>Giỏ hàng ({cart.reduce((acc, item) => acc + item.SoLuong, 0)})</div>
             </div>
@@ -409,9 +446,22 @@ const CustomerPage = () => {
                 <div style={{maxWidth: '600px', margin: '0 auto'}}>
                     <h3>Đặt lịch hẹn</h3>
                     <form onSubmit={handleBookAppointment} style={formStyle}>
-                        <select style={inputStyle} value={booking.MaChiNhanh} onChange={e => setBooking({...booking, MaChiNhanh: e.target.value})} required>
-                            <option value="">Chọn chi nhánh</option>
-                            {branches.map(b => <option key={b.MaChiNhanh} value={b.MaChiNhanh}>{b.TenChiNhanh}</option>)}
+                        <label style={{fontWeight: 'bold', marginBottom: '5px'}}>Nhập ID Chi nhánh (hoặc chọn từ danh sách - demo nhập tay):</label>
+                        <input 
+                            style={inputStyle} 
+                            type="text" 
+                            placeholder="Nhập ID chi nhánh" 
+                            value={booking.MaChiNhanh} 
+                            onChange={e => setBooking({...booking, MaChiNhanh: e.target.value})} 
+                            required 
+                        />
+                        <select style={inputStyle} value={booking.MaChiNhanh} onChange={e => setBooking({...booking, MaChiNhanh: e.target.value})}>
+                            <option value="">-- Hoặc chọn từ danh sách --</option>
+                            {branches.map(b => (
+                                <option key={b.MaChiNhanh} value={b.MaChiNhanh}>
+                                    {b.TenChiNhanh} - {b.DiaChi || 'Không có địa chỉ'}
+                                </option>
+                            ))}
                         </select>
                         <select style={inputStyle} value={booking.MaThuCung} onChange={e => setBooking({...booking, MaThuCung: e.target.value})} required>
                             <option value="">Chọn thú cưng</option>
@@ -498,6 +548,7 @@ const CustomerPage = () => {
                                 <th style={{padding: '10px', border: '1px solid #ddd'}}>Ngày</th>
                                 <th style={{padding: '10px', border: '1px solid #ddd'}}>Trạng thái</th>
                                 <th style={{padding: '10px', border: '1px solid #ddd'}}>Tổng tiền</th>
+                                <th style={{padding: '10px', border: '1px solid #ddd'}}>Hành động</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -507,74 +558,18 @@ const CustomerPage = () => {
                                     <td style={{padding: '10px', border: '1px solid #ddd'}}>{new Date(h.Date).toLocaleString()}</td>
                                     <td style={{padding: '10px', border: '1px solid #ddd'}}>{h.Status}</td>
                                     <td style={{padding: '10px', border: '1px solid #ddd'}}>{h.Total ? h.Total.toLocaleString() : '-'}</td>
+                                    <td style={{padding: '10px', border: '1px solid #ddd'}}>
+                                        <button 
+                                            onClick={() => handleViewHistoryDetails(h)}
+                                            style={{...buttonStyle, backgroundColor: '#3498db', padding: '5px 15px', fontSize: '14px'}}
+                                        >
+                                            Xem chi tiết
+                                        </button>
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
                     </table>
-                </div>
-            )}
-
-            {activeTab === 'vaccines' && (
-                <div>
-                    <h3>💉 Lịch tiêm chủng sắp tới</h3>
-                    <p style={{color: '#666', marginBottom: '20px'}}>Nhắc nhở các mũi tiêm chủng sắp đến hạn cho thú cưng của bạn</p>
-                    {vaccinations.length === 0 ? (
-                        <div style={{textAlign: 'center', padding: '40px', color: '#999'}}>
-                            <p>✅ Không có lịch tiêm chủng sắp tới</p>
-                        </div>
-                    ) : (
-                        <div style={gridStyle}>
-                            {vaccinations.map((vac, idx) => {
-                                const daysLeft = vac.SoNgayConLai;
-                                const isUrgent = daysLeft <= 7;
-                                const isWarning = daysLeft > 7 && daysLeft <= 14;
-                                
-                                return (
-                                    <div key={idx} style={{
-                                        ...cardStyle, 
-                                        borderLeft: `5px solid ${isUrgent ? '#e74c3c' : isWarning ? '#f39c12' : '#3498db'}`,
-                                        backgroundColor: isUrgent ? '#ffebee' : isWarning ? '#fff3e0' : '#e3f2fd'
-                                    }}>
-                                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '10px'}}>
-                                            <h4 style={{margin: 0}}>{vac.TenThuCung}</h4>
-                                            <span style={{
-                                                backgroundColor: isUrgent ? '#e74c3c' : isWarning ? '#f39c12' : '#3498db',
-                                                color: 'white',
-                                                padding: '3px 8px',
-                                                borderRadius: '4px',
-                                                fontSize: '12px',
-                                                fontWeight: 'bold'
-                                            }}>
-                                                {daysLeft === 0 ? 'HÔM NAY' : daysLeft === 1 ? 'NGÀY MAI' : `${daysLeft} ngày nữa`}
-                                            </span>
-                                        </div>
-                                        <div style={{fontSize: '14px', color: '#555', marginBottom: '5px'}}>
-                                            <strong>Dịch vụ:</strong> {vac.TenDichVu || 'Tiêm chủng'}
-                                        </div>
-                                        <div style={{fontSize: '14px', color: '#555', marginBottom: '5px'}}>
-                                            <strong>Số lô vaccine:</strong> {vac.SoLoVacXin || 'N/A'}
-                                        </div>
-                                        <div style={{fontSize: '14px', color: '#555', marginBottom: '5px'}}>
-                                            <strong>Ngày tiêm gần nhất:</strong> {new Date(vac.NgayTiem).toLocaleDateString()}
-                                        </div>
-                                        <div style={{fontSize: '14px', color: '#555', marginBottom: '5px'}}>
-                                            <strong>Ngày tiêm tiếp theo:</strong> {new Date(vac.NgayTaiChung).toLocaleDateString()}
-                                        </div>
-                                        {vac.BacSi && (
-                                            <div style={{fontSize: '14px', color: '#555', marginBottom: '10px'}}>
-                                                <strong>Bác sĩ:</strong> {vac.BacSi}
-                                            </div>
-                                        )}
-                                        {isUrgent && (
-                                            <div style={{marginTop: '10px', padding: '8px', backgroundColor: '#fff', borderRadius: '4px', fontSize: '13px', color: '#c0392b', fontWeight: 'bold'}}>
-                                                ⚠️ Vui lòng đặt lịch hẹn sớm!
-                                            </div>
-                                        )}
-                                    </div>
-                                );
-                            })}
-                        </div>
-                    )}
                 </div>
             )}
 
@@ -624,6 +619,237 @@ const CustomerPage = () => {
                             ))}
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* History Details Modal */}
+            {showHistoryDetails && selectedHistoryItem && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    zIndex: 1000
+                }} onClick={() => setShowHistoryDetails(false)}>
+                    <div style={{
+                        backgroundColor: 'white',
+                        borderRadius: '12px',
+                        width: '90%',
+                        maxWidth: '700px',
+                        maxHeight: '80vh',
+                        overflowY: 'auto',
+                        padding: '25px',
+                        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)'
+                    }} onClick={(e) => e.stopPropagation()}>
+                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '2px solid #3498db', paddingBottom: '15px'}}>
+                            <h2 style={{margin: 0, color: '#2c3e50'}}>
+                                {selectedHistoryItem.Type === 'Order' ? '🛒 Chi tiết đơn hàng' : '📋 Chi tiết lịch hẹn'}
+                            </h2>
+                            <button onClick={() => setShowHistoryDetails(false)} style={{
+                                background: 'none',
+                                border: 'none',
+                                fontSize: '28px',
+                                cursor: 'pointer',
+                                color: '#7f8c8d'
+                            }}>×</button>
+                        </div>
+
+                        {selectedHistoryItem.Type === 'Order' ? (
+                            <div style={{display: 'grid', gap: '15px'}}>
+                                <div style={{padding: '15px', backgroundColor: '#ecf0f1', borderRadius: '8px'}}>
+                                    <h3 style={{margin: '0 0 10px 0', color: '#2c3e50'}}>🏥 Thông tin chi nhánh</h3>
+                                    <p style={{margin: '5px 0'}}><strong>Chi nhánh:</strong> {selectedHistoryItem.items[0]?.TenChiNhanh}</p>
+                                    <p style={{margin: '5px 0'}}><strong>Địa chỉ:</strong> {selectedHistoryItem.items[0]?.DiaChiChiNhanh}</p>
+                                </div>
+
+                                <div style={{padding: '15px', backgroundColor: '#e8f5e9', borderRadius: '8px'}}>
+                                    <h3 style={{margin: '0 0 10px 0', color: '#2c3e50'}}>📦 Thông tin đơn hàng</h3>
+                                    <p style={{margin: '5px 0'}}><strong>Ngày đặt:</strong> {new Date(selectedHistoryItem.items[0]?.NgayDat).toLocaleString('vi-VN')}</p>
+                                    <p style={{margin: '5px 0'}}><strong>Loại đơn:</strong> {selectedHistoryItem.items[0]?.LoaiDon}</p>
+                                    <p style={{margin: '5px 0'}}><strong>Trạng thái:</strong> <span style={{
+                                        padding: '3px 8px',
+                                        borderRadius: '4px',
+                                        backgroundColor: selectedHistoryItem.items[0]?.TrangThai === 'Hoàn tất' ? '#d4edda' : '#fff3cd',
+                                        color: selectedHistoryItem.items[0]?.TrangThai === 'Hoàn tất' ? '#155724' : '#856404'
+                                    }}>{selectedHistoryItem.items[0]?.TrangThai}</span></p>
+                                </div>
+
+                                <div style={{padding: '15px', backgroundColor: '#fff3e0', borderRadius: '8px'}}>
+                                    <h3 style={{margin: '0 0 10px 0', color: '#2c3e50'}}>🛍️ Sản phẩm</h3>
+                                    <table style={{width: '100%', borderCollapse: 'collapse'}}>
+                                        <thead>
+                                            <tr style={{borderBottom: '2px solid #ddd'}}>
+                                                <th style={{padding: '8px', textAlign: 'left'}}>Sản phẩm</th>
+                                                <th style={{padding: '8px', textAlign: 'center'}}>SL</th>
+                                                <th style={{padding: '8px', textAlign: 'right'}}>Đơn giá</th>
+                                                <th style={{padding: '8px', textAlign: 'right'}}>Thành tiền</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {selectedHistoryItem.items.map((item, idx) => (
+                                                <tr key={idx} style={{borderBottom: '1px solid #eee'}}>
+                                                    <td style={{padding: '8px'}}>{item.TenSanPham}</td>
+                                                    <td style={{padding: '8px', textAlign: 'center'}}>{item.SoLuong}</td>
+                                                    <td style={{padding: '8px', textAlign: 'right'}}>{item.DonGiaBan.toLocaleString()} VND</td>
+                                                    <td style={{padding: '8px', textAlign: 'right'}}>{item.ThanhTien.toLocaleString()} VND</td>
+                                                </tr>
+                                            ))}
+                                            <tr style={{borderTop: '2px solid #ddd', fontWeight: 'bold'}}>
+                                                <td colSpan="3" style={{padding: '8px', textAlign: 'right'}}>Tổng cộng:</td>
+                                                <td style={{padding: '8px', textAlign: 'right', color: '#27ae60', fontSize: '16px'}}>
+                                                    {selectedHistoryItem.items.reduce((sum, item) => sum + item.ThanhTien, 0).toLocaleString()} VND
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        ) : (
+                            <div style={{display: 'grid', gap: '15px'}}>
+                            <div style={{padding: '15px', backgroundColor: '#ecf0f1', borderRadius: '8px'}}>
+                                <h3 style={{margin: '0 0 10px 0', color: '#2c3e50'}}>🏥 Thông tin chi nhánh</h3>
+                                <p style={{margin: '5px 0'}}><strong>Chi nhánh:</strong> {selectedHistoryItem.TenChiNhanh}</p>
+                                <p style={{margin: '5px 0'}}><strong>Địa chỉ:</strong> {selectedHistoryItem.DiaChiChiNhanh}</p>
+                            </div>
+
+                            <div style={{padding: '15px', backgroundColor: '#e8f5e9', borderRadius: '8px'}}>
+                                <h3 style={{margin: '0 0 10px 0', color: '#2c3e50'}}>🐾 Thông tin thú cưng</h3>
+                                <p style={{margin: '5px 0'}}><strong>Tên:</strong> {selectedHistoryItem.TenThuCung}</p>
+                                <p style={{margin: '5px 0'}}><strong>Loại:</strong> {selectedHistoryItem.LoaiThuCung}</p>
+                                {selectedHistoryItem.Giong && (
+                                    <p style={{margin: '5px 0'}}><strong>Giống:</strong> {selectedHistoryItem.Giong}</p>
+                                )}
+                                <p style={{margin: '5px 0'}}><strong>Cân nặng:</strong> {selectedHistoryItem.CanNang} kg</p>
+                            </div>
+
+                            <div style={{padding: '15px', backgroundColor: '#fff3e0', borderRadius: '8px'}}>
+                                <h3 style={{margin: '0 0 10px 0', color: '#2c3e50'}}>🩺 Thông tin khám</h3>
+                                <p style={{margin: '5px 0'}}><strong>Ngày giờ:</strong> {new Date(selectedHistoryItem.NgayGioHen).toLocaleString('vi-VN')}</p>
+                                <p style={{margin: '5px 0'}}><strong>Trạng thái:</strong> <span style={{
+                                    padding: '3px 8px',
+                                    borderRadius: '4px',
+                                    backgroundColor: selectedHistoryItem.TrangThai === 'Hoàn tất' ? '#d4edda' : '#fff3cd',
+                                    color: selectedHistoryItem.TrangThai === 'Hoàn tất' ? '#155724' : '#856404'
+                                }}>{selectedHistoryItem.TrangThai}</span></p>
+                                <p style={{margin: '5px 0'}}><strong>Dịch vụ:</strong> {selectedHistoryItem.DichVu}</p>
+                                {selectedHistoryItem.BacSi && (
+                                    <p style={{margin: '5px 0'}}><strong>Bác sĩ:</strong> {selectedHistoryItem.BacSi}</p>
+                                )}
+                            </div>
+
+                            {selectedHistoryItem.TrieuChung && (
+                                <div style={{padding: '15px', backgroundColor: '#e3f2fd', borderRadius: '8px'}}>
+                                    <h3 style={{margin: '0 0 10px 0', color: '#2c3e50'}}>📝 Hồ sơ khám bệnh</h3>
+                                    <p style={{margin: '5px 0'}}><strong>Triệu chứng:</strong> {selectedHistoryItem.TrieuChung}</p>
+                                    <p style={{margin: '5px 0'}}><strong>Chuẩn đoán:</strong> {selectedHistoryItem.ChuanDoan}</p>
+                                    {selectedHistoryItem.NgayTaiKham && (
+                                        <p style={{margin: '5px 0'}}><strong>Ngày tái khám:</strong> {new Date(selectedHistoryItem.NgayTaiKham).toLocaleDateString('vi-VN')}</p>
+                                    )}
+                                </div>
+                            )}
+
+                            {selectedHistoryItem.KetQua && selectedHistoryItem.KetQua !== 'Trống' && (
+                                <div style={{padding: '15px', backgroundColor: '#f3e5f5', borderRadius: '8px'}}>
+                                    <h3 style={{margin: '0 0 10px 0', color: '#2c3e50'}}>✅ Kết quả dịch vụ</h3>
+                                    <p style={{margin: '5px 0', whiteSpace: 'pre-wrap'}}>{selectedHistoryItem.KetQua}</p>
+                                </div>
+                            )}
+                        </div>
+                        )}
+
+                        <button onClick={() => setShowHistoryDetails(false)} style={{
+                            ...buttonStyle,
+                            backgroundColor: '#95a5a6',
+                            width: '100%',
+                            marginTop: '20px'
+                        }}>
+                            Đóng
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Checkout Modal */}
+            {showCheckoutModal && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    zIndex: 1000
+                }} onClick={() => setShowCheckoutModal(false)}>
+                    <div style={{
+                        backgroundColor: 'white',
+                        borderRadius: '12px',
+                        width: '90%',
+                        maxWidth: '500px',
+                        padding: '25px',
+                        boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)'
+                    }} onClick={(e) => e.stopPropagation()}>
+                        <h2 style={{margin: '0 0 20px 0', color: '#2c3e50'}}>🛒 Thanh toán đơn hàng</h2>
+                        
+                        <div style={{marginBottom: '20px'}}>
+                            <label style={{display: 'block', fontWeight: 'bold', marginBottom: '8px'}}>
+                                Chọn chi nhánh để nhận hàng:
+                            </label>
+                            <select 
+                                style={inputStyle}
+                                value={checkoutBranch}
+                                onChange={(e) => setCheckoutBranch(e.target.value)}
+                            >
+                                <option value="">-- Chọn chi nhánh --</option>
+                                {branches.map(b => (
+                                    <option key={b.MaChiNhanh} value={b.MaChiNhanh}>
+                                        {b.TenChiNhanh} - {b.DiaChi || 'Không có địa chỉ'}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div style={{marginBottom: '20px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '8px'}}>
+                            <h4 style={{margin: '0 0 10px 0'}}>Tóm tắt đơn hàng:</h4>
+                            <p style={{margin: '5px 0'}}>Số sản phẩm: {cart.reduce((acc, item) => acc + item.SoLuong, 0)}</p>
+                            <p style={{margin: '5px 0', fontSize: '16px', fontWeight: 'bold', color: '#27ae60'}}>
+                                Tổng tiền: {cart.reduce((acc, item) => acc + (item.GiaBan * item.SoLuong), 0).toLocaleString()} VND
+                            </p>
+                        </div>
+
+                        <div style={{display: 'flex', gap: '10px'}}>
+                            <button 
+                                onClick={() => {
+                                    setShowCheckoutModal(false);
+                                    setCheckoutBranch('');
+                                }}
+                                style={{
+                                    ...buttonStyle,
+                                    backgroundColor: '#95a5a6',
+                                    flex: 1
+                                }}
+                            >
+                                Hủy
+                            </button>
+                            <button 
+                                onClick={confirmCheckout}
+                                style={{
+                                    ...buttonStyle,
+                                    backgroundColor: '#27ae60',
+                                    flex: 1
+                                }}
+                            >
+                                Xác nhận đặt hàng
+                            </button>
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

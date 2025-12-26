@@ -13,7 +13,12 @@ const staffController = {
                 // Check if name matches (case insensitive)
                 if (staff.HoTen.toLowerCase() === hoten.toLowerCase()) {
                     const token = jwt.sign(
-                        { id: staff.MaNhanVien, role: 'staff', name: staff.HoTen },
+                        { 
+                            id: staff.MaNhanVien, 
+                            MaNhanVien: staff.MaNhanVien,
+                            role: 'staff', 
+                            name: staff.HoTen 
+                        },
                         process.env.JWT_SECRET,
                         { expiresIn: '24h' }
                     );

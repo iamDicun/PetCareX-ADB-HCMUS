@@ -7,7 +7,15 @@ async function findByPhoneNum(sdt) {
         
         const result = await pool.request()
             .input('sdt', sql.VarChar, sdt)
-            .query('SELECT TOP 1 * FROM NhanVien WHERE SoDienThoai = @sdt');
+            .query(`
+                SELECT TOP 1 
+                    nv.*, 
+                    cn.TenChiNhanh,
+                    cn.DiaChi
+                FROM NhanVien nv
+                LEFT JOIN ChiNhanh cn ON nv.MaChiNhanh = cn.MaChiNhanh
+                WHERE nv.SoDienThoai = @sdt
+            `);
         
         
         return result.recordset[0] || null;

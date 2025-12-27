@@ -410,12 +410,15 @@ async function getConfirmedInvoices(customerId) {
                     DH.TrangThai,
                     N'Đơn hàng' as LoaiGiaoDich,
                     CN.TenChiNhanh,
-                    NV.HoTen as NhanVienXuLy
+                    NV.HoTen as NhanVienXuLy,
+                    CASE WHEN DG.MaDanhGia IS NOT NULL THEN 1 ELSE 0 END as DaDanhGia
                 FROM DonHang DH
                 LEFT JOIN HoaDon HD ON DH.MaHoaDon = HD.MaHoaDon
                 LEFT JOIN ChiNhanh CN ON DH.MaChiNhanh = CN.MaChiNhanh
                 LEFT JOIN NhanVien NV ON DH.MaNhanVienSale = NV.MaNhanVien
+                LEFT JOIN DanhGia DG ON HD.MaHoaDon = DG.MaHoaDon
                 WHERE DH.MaKhachHang = @MaKhachHang
+                AND DH.TrangThai = N'Hoàn tất'
                 AND HD.MaHoaDon IS NOT NULL
             `);
         
@@ -436,13 +439,15 @@ async function getConfirmedInvoices(customerId) {
                     LH.TrangThai,
                     N'Lịch hẹn' as LoaiGiaoDich,
                     CN.TenChiNhanh,
-                    NV.HoTen as NhanVienXuLy
+                    NV.HoTen as NhanVienXuLy,
+                    CASE WHEN DG.MaDanhGia IS NOT NULL THEN 1 ELSE 0 END as DaDanhGia
                 FROM LichHen LH
                 LEFT JOIN HoaDon HD ON LH.MaHoaDon = HD.MaHoaDon
                 LEFT JOIN ChiNhanh CN ON LH.MaChiNhanh = CN.MaChiNhanh
                 LEFT JOIN NhanVien NV ON LH.MaNVTao = NV.MaNhanVien
+                LEFT JOIN DanhGia DG ON HD.MaHoaDon = DG.MaHoaDon
                 WHERE LH.MaKhachHang = @MaKhachHang
-                AND LH.TrangThai = N'Đã xác nhận'
+                AND LH.TrangThai = N'Hoàn tất'
                 AND HD.MaHoaDon IS NOT NULL
             `);
         
@@ -535,6 +540,49 @@ async function getOrderDetails(orderId) {
     }
 }
 
+async function submitRating(ratingData) {
+    try {
+        const pool = await poolPromise;
+        
+        // Check if already rated
+        const checkResult = await pool.request()
+            .input('MaHoaDon', sql.UniqueIdentifier, ratingData.maHoaDon)
+            .query('SELECT MaDanhGia FROM DanhGia WHERE MaHoaDon = @MaHoaDon');
+        
+        if (checkResult.recordset.length > 0) {
+            throw new Error('Hóa đơn này đã được đánh giá');
+        }
+        
+        // Get branch from invoice
+        const invoiceResult = await pool.request()
+            .input('MaHoaDon', sql.UniqueIdentifier, ratingData.maHoaDon)
+            .query('SELECT MaChiNhanh FROM HoaDon WHERE MaHoaDon = @MaHoaDon');
+        
+        if (invoiceResult.recordset.length === 0) {
+            throw new Error('Không tìm thấy hóa đơn');
+        }
+        
+        const maChiNhanh = invoiceResult.recordset[0].MaChiNhanh;
+        
+        // Insert rating
+        await pool.request()
+            .input('MaHoaDon', sql.UniqueIdentifier, ratingData.maHoaDon)
+            .input('MaChiNhanh', sql.UniqueIdentifier, maChiNhanh)
+            .input('DiemChatLuong', sql.Int, ratingData.diemChatLuong)
+            .input('DiemThaiDo', sql.Int, ratingData.diemThaiDo)
+            .input('BinhLuan', sql.NVarChar, ratingData.binhLuan || null)
+            .query(`
+                INSERT INTO DanhGia (MaHoaDon, MaChiNhanh, DiemChatLuong, DiemThaiDo, BinhLuan)
+                VALUES (@MaHoaDon, @MaChiNhanh, @DiemChatLuong, @DiemThaiDo, @BinhLuan)
+            `);
+        
+        return true;
+    } catch (error) {
+        console.error('[submitRating] Error:', error.message, error);
+        throw error;
+    }
+}
+
 export default {
     findByPhoneNum,
     getProducts,
@@ -552,5 +600,6 @@ export default {
     getConfirmedInvoices,
     getUpcomingVaccinations,
     getAppointmentDetails,
-    getOrderDetails
+    getOrderDetails,
+    submitRating
 };

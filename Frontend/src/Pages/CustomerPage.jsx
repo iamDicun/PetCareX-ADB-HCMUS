@@ -21,6 +21,9 @@ const CustomerPage = () => {
     const [selectedHistoryItem, setSelectedHistoryItem] = useState(null);
     const [showCheckoutModal, setShowCheckoutModal] = useState(false);
     const [checkoutBranch, setCheckoutBranch] = useState('');
+    const [showRatingModal, setShowRatingModal] = useState(false);
+    const [selectedInvoice, setSelectedInvoice] = useState(null);
+    const [rating, setRating] = useState({ diemChatLuong: 5, diemThaiDo: 5, binhLuan: '' });
 
     // Forms state (removed newPet - no longer allowing pet registration)
     const [booking, setBooking] = useState({
@@ -165,6 +168,44 @@ const CustomerPage = () => {
             setCart([...cart, { ...product, SoLuong: 1 }]);
         }
         alert(`Đã thêm ${product.TenSanPham} vào giỏ hàng`);
+    };
+
+    const handleOpenRatingModal = (invoice) => {
+        setSelectedInvoice(invoice);
+        setRating({ diemChatLuong: 5, diemThaiDo: 5, binhLuan: '' });
+        setShowRatingModal(true);
+    };
+
+    const handleSubmitRating = async () => {
+        if (!selectedInvoice) return;
+        
+        try {
+            const res = await fetch('http://localhost:5000/api/customer/rating', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({
+                    maHoaDon: selectedInvoice.MaHoaDon,
+                    diemChatLuong: rating.diemChatLuong,
+                    diemThaiDo: rating.diemThaiDo,
+                    binhLuan: rating.binhLuan
+                })
+            });
+            
+            const data = await res.json();
+            if (data.success) {
+                alert('Đánh giá thành công!');
+                setShowRatingModal(false);
+                fetchInvoices(); // Reload invoices
+            } else {
+                alert('Lỗi: ' + data.message);
+            }
+        } catch (error) {
+            console.error('Error submitting rating:', error);
+            alert('Lỗi khi gửi đánh giá');
+        }
     };
 
     const handleCheckout = async () => {
@@ -565,6 +606,25 @@ const CustomerPage = () => {
                                             Tổng thanh toán: {invoice.TongTienThucTra.toLocaleString()} VND
                                         </div>
                                     </div>
+                                    {invoice.TrangThai === 'Hoàn tất' && (
+                                        <button
+                                            onClick={() => handleOpenRatingModal(invoice)}
+                                            disabled={invoice.DaDanhGia}
+                                            style={{
+                                                marginTop: '15px',
+                                                padding: '10px 20px',
+                                                backgroundColor: invoice.DaDanhGia ? '#95a5a6' : '#f39c12',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '5px',
+                                                cursor: invoice.DaDanhGia ? 'not-allowed' : 'pointer',
+                                                fontSize: '14px',
+                                                width: '100%'
+                                            }}
+                                        >
+                                            {invoice.DaDanhGia ? '✓ Đã đánh giá' : '⭐ Đánh giá dịch vụ'}
+                                        </button>
+                                    )}
                                 </div>
                             ))}
                         </div>
@@ -797,6 +857,124 @@ const CustomerPage = () => {
                                 }}
                             >
                                 Xác nhận đặt hàng
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Rating Modal */}
+            {showRatingModal && selectedInvoice && (
+                <div style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0,0,0,0.6)',
+                    display: 'flex',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    zIndex: 1000
+                }}>
+                    <div style={{
+                        backgroundColor: 'white',
+                        padding: '30px',
+                        borderRadius: '12px',
+                        maxWidth: '500px',
+                        width: '90%',
+                        boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
+                    }}>
+                        <h3 style={{marginTop: 0, color: '#2c3e50'}}>⭐ Đánh giá dịch vụ</h3>
+                        <p style={{color: '#666', marginBottom: '20px'}}>Hóa đơn #{selectedInvoice.MaHoaDon.substring(0, 8)}</p>
+                        
+                        <div style={{marginBottom: '20px'}}>
+                            <label style={{display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#555'}}>
+                                Chất lượng dịch vụ (1-5):
+                            </label>
+                            <div style={{display: 'flex', gap: '10px'}}>
+                                {[1, 2, 3, 4, 5].map(star => (
+                                    <button
+                                        key={star}
+                                        onClick={() => setRating({...rating, diemChatLuong: star})}
+                                        style={{
+                                            fontSize: '32px',
+                                            border: 'none',
+                                            background: 'none',
+                                            cursor: 'pointer',
+                                            color: star <= rating.diemChatLuong ? '#f39c12' : '#ddd'
+                                        }}
+                                    >
+                                        ★
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div style={{marginBottom: '20px'}}>
+                            <label style={{display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#555'}}>
+                                Thái độ phục vụ (1-5):
+                            </label>
+                            <div style={{display: 'flex', gap: '10px'}}>
+                                {[1, 2, 3, 4, 5].map(star => (
+                                    <button
+                                        key={star}
+                                        onClick={() => setRating({...rating, diemThaiDo: star})}
+                                        style={{
+                                            fontSize: '32px',
+                                            border: 'none',
+                                            background: 'none',
+                                            cursor: 'pointer',
+                                            color: star <= rating.diemThaiDo ? '#f39c12' : '#ddd'
+                                        }}
+                                    >
+                                        ★
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        <div style={{marginBottom: '20px'}}>
+                            <label style={{display: 'block', marginBottom: '8px', fontWeight: 'bold', color: '#555'}}>
+                                Nhận xét (tùy chọn):
+                            </label>
+                            <textarea
+                                value={rating.binhLuan}
+                                onChange={(e) => setRating({...rating, binhLuan: e.target.value})}
+                                style={{
+                                    width: '100%',
+                                    minHeight: '100px',
+                                    padding: '10px',
+                                    border: '1px solid #ddd',
+                                    borderRadius: '5px',
+                                    fontSize: '14px',
+                                    fontFamily: 'inherit',
+                                    resize: 'vertical'
+                                }}
+                                placeholder="Chia sẻ trải nghiệm của bạn..."
+                            />
+                        </div>
+
+                        <div style={{display: 'flex', gap: '10px'}}>
+                            <button
+                                onClick={() => setShowRatingModal(false)}
+                                style={{
+                                    ...buttonStyle,
+                                    backgroundColor: '#95a5a6',
+                                    flex: 1
+                                }}
+                            >
+                                Hủy
+                            </button>
+                            <button
+                                onClick={handleSubmitRating}
+                                style={{
+                                    ...buttonStyle,
+                                    backgroundColor: '#f39c12',
+                                    flex: 1
+                                }}
+                            >
+                                Gửi đánh giá
                             </button>
                         </div>
                     </div>

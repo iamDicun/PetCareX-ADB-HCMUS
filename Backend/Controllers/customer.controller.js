@@ -197,6 +197,25 @@ const cusController = {
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
         }
+    },
+
+    submitRating: async (req, res) => {
+        try {
+            const { maHoaDon, diemChatLuong, diemThaiDo, binhLuan } = req.body;
+            
+            if (!maHoaDon || !diemChatLuong || !diemThaiDo) {
+                return res.status(400).json({ success: false, message: 'Thiếu thông tin đánh giá' });
+            }
+            
+            if (diemChatLuong < 1 || diemChatLuong > 5 || diemThaiDo < 1 || diemThaiDo > 5) {
+                return res.status(400).json({ success: false, message: 'Điểm đánh giá phải từ 1-5' });
+            }
+            
+            await CusService.submitRating({ maHoaDon, diemChatLuong, diemThaiDo, binhLuan });
+            res.json({ success: true, message: 'Đánh giá thành công' });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
     }
 
 };

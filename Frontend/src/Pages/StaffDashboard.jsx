@@ -20,6 +20,9 @@ const StaffDashboard = () => {
     const [customer, setCustomer] = useState(null);
     const [customerPets, setCustomerPets] = useState([]);
     const [selectedPet, setSelectedPet] = useState('');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState([]);
+    const [showSearchResults, setShowSearchResults] = useState(false);
     
     // Pet registration states
     const [showPetModal, setShowPetModal] = useState(false);
@@ -46,27 +49,83 @@ const StaffDashboard = () => {
     const [showDetailsModal, setShowDetailsModal] = useState(false);
     const [detailsType, setDetailsType] = useState('');
     const [detailsData, setDetailsData] = useState([]);
+    
+    // Branch filter
+    const [branches, setBranches] = useState([]);
+    const [selectedBranch, setSelectedBranch] = useState('');
 
     const API_URL = 'http://localhost:5000/api';
 
+    // Live search effect
+    useEffect(() => {
+        const performSearch = async () => {
+            if (searchQuery.trim().length >= 2 && !customer) {
+                try {
+                    const token = localStorage.getItem('token');
+                    const res = await fetch(`${API_URL}/staff/customers/search?query=${encodeURIComponent(searchQuery)}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await res.json();
+                    if (data.success && data.customers) {
+                        setSearchResults(data.customers);
+                        setShowSearchResults(data.customers.length > 0);
+                    }
+                } catch (error) {
+                    console.error('Search error:', error);
+                }
+            } else {
+                setSearchResults([]);
+                setShowSearchResults(false);
+            }
+        };
+
+        const debounceTimer = setTimeout(performSearch, 300);
+        return () => clearTimeout(debounceTimer);
+    }, [searchQuery, customer]);
+
+    useEffect(() => {
+        loadBranches();
+    }, []);
+    
     useEffect(() => {
         if (user?.MaChiNhanh) {
-            loadPendingData();
+            setSelectedBranch(user.MaChiNhanh);
         }
     }, [user]);
     
     useEffect(() => {
-        if (user?.MaChiNhanh) {
+        if (selectedBranch) {
+            loadPendingData();
+        }
+    }, [selectedBranch]);
+    
+    useEffect(() => {
+        if (selectedBranch) {
             loadPendingAppointments();
         }
-    }, [user, appointmentPage]);
+    }, [selectedBranch, appointmentPage]);
+
+    const loadBranches = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_URL}/company-manager/branches`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (data.success) {
+                setBranches(data.branches);
+            }
+        } catch (error) {
+            console.error('Error loading branches:', error);
+        }
+    };
 
     const loadPendingData = async () => {
         try {
             const token = localStorage.getItem('token');
             const headers = { 'Authorization': `Bearer ${token}` };
             
-            const ordersRes = await fetch(`${API_URL}/staff/orders/pending?branchId=${user.MaChiNhanh}`, { headers });
+            const ordersRes = await fetch(`${API_URL}/staff/orders/pending?branchId=${selectedBranch}`, { headers });
             const ordersData = await ordersRes.json();
             
             if (ordersData.success) setPendingOrders(ordersData.orders);
@@ -80,8 +139,8 @@ const StaffDashboard = () => {
             const token = localStorage.getItem('token');
             const headers = { 'Authorization': `Bearer ${token}` };
             
-            const appointmentsRes = await fetch(`${API_URL}/staff/appointments/pending?branchId=${user.MaChiNhanh}&page=${appointmentPage}&limit=10`, { headers });
-            const appointmentsData = await appointmentsRes.json();
+            const res = await fetch(`${API_URL}/staff/appointments/pending?branchId=${selectedBranch}&page=${appointmentPage}&limit=10`, { headers });
+            const appointmentsData = await res.json();
             
             if (appointmentsData.success) {
                 setPendingAppointments(appointmentsData.appointments);
@@ -102,11 +161,11 @@ const StaffDashboard = () => {
             const headers = { 'Authorization': `Bearer ${token}` };
             
             if (type === 'order') {
-                const res = await fetch(`${API_URL}/staff/products`, { headers });
+                const res = await fetch(`${API_URL}/staff/products?branchId=${selectedBranch}`, { headers });
                 const data = await res.json();
                 if (data.success) setProducts(data.products);
             } else {
-                const res = await fetch(`${API_URL}/staff/services`, { headers });
+                const res = await fetch(`${API_URL}/staff/services?branchId=${selectedBranch}`, { headers });
                 const data = await res.json();
                 if (data.success) setServices(data.services);
             }
@@ -115,9 +174,108 @@ const StaffDashboard = () => {
         }
     };
 
-    const handleFindCustomer = async () => {
-        if (!customerName || !customerPhone) {
-            alert('Vui lòng nhập đầy đủ tên và số điện thoại');
+    const handleSelectCustomer = async (selectedCustomer) => {
+        setCustomer(selectedCustomer);
+        setCustomerName(selectedCustomer.HoTen);
+        setCustomerPhone(selectedCustomer.SoDienThoai);
+        setSearchQuery('');
+        setShowSearchResults(false);
+        
+        // Load pets if needed
+        if (createType === 'appointment' || showPetModal) {
+            try {
+                const token = localStorage.getItem('token');
+                const petsRes = await fetch(`${API_URL}/staff/customer/${selectedCustomer.MaKhachHang}/pets`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const petsData = await petsRes.json();
+                if (petsData.success) setCustomerPets(petsData.pets);
+            } catch (error) {
+                console.error('Error loading pets:', error);
+            }
+        }
+    };
+
+    const handleFindCustomer = async (searchQuery = null) => {
+        const query = searchQuery || customerName || customerPhone || '';
+        
+        if (!query || typeof query !== 'string' || query.trim() === '') {
+            alert('Vui lòng nhập tên hoặc số điện thoại để tìm kiếm');
+            return;
+        }
+        
+        try {
+            const token = localStorage.getItem('token');
+            
+            // Search for customers
+            const res = await fetch(`${API_URL}/staff/customers/search?query=${encodeURIComponent(query)}`, {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            const data = await res.json();
+            if (data.success) {
+                if (data.customers && data.customers.length > 0) {
+                    if (data.customers.length === 1) {
+                        // Only one customer found, select automatically
+                        setCustomer(data.customers[0]);
+                        setCustomerName(data.customers[0].HoTen);
+                        setCustomerPhone(data.customers[0].SoDienThoai);
+                        
+                        // Load pets if appointment
+                        if (createType === 'appointment' || showPetModal) {
+                            const petsRes = await fetch(`${API_URL}/staff/customer/${data.customers[0].MaKhachHang}/pets`, {
+                                headers: { 'Authorization': `Bearer ${token}` }
+                            });
+                            const petsData = await petsRes.json();
+                            if (petsData.success) setCustomerPets(petsData.pets);
+                        }
+                    } else {
+                        // Multiple customers found, show selection
+                        const selection = data.customers.map((c, i) => 
+                            `${i + 1}. ${c.HoTen} - ${c.SoDienThoai}`
+                        ).join('\n');
+                        const choice = prompt(`Tìm thấy ${data.customers.length} khách hàng:\n\n${selection}\n\nNhập số thứ tự để chọn (hoặc 0 để tạo mới):`);
+                        
+                        if (choice && parseInt(choice) > 0 && parseInt(choice) <= data.customers.length) {
+                            const selectedCustomer = data.customers[parseInt(choice) - 1];
+                            setCustomer(selectedCustomer);
+                            setCustomerName(selectedCustomer.HoTen);
+                            setCustomerPhone(selectedCustomer.SoDienThoai);
+                            
+                            // Load pets if appointment
+                            if (createType === 'appointment' || showPetModal) {
+                                const petsRes = await fetch(`${API_URL}/staff/customer/${selectedCustomer.MaKhachHang}/pets`, {
+                                    headers: { 'Authorization': `Bearer ${token}` }
+                                });
+                                const petsData = await petsRes.json();
+                                if (petsData.success) setCustomerPets(petsData.pets);
+                            }
+                        } else if (choice === '0') {
+                            // Create new customer
+                            await handleCreateNewCustomer();
+                        }
+                    }
+                } else {
+                    // No customer found
+                    if (window.confirm('Không tìm thấy khách hàng. Bạn có muốn tạo khách hàng mới?')) {
+                        await handleCreateNewCustomer();
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error finding customer:', error);
+            alert('Lỗi khi tìm khách hàng');
+        }
+    };
+
+    const handleCreateNewCustomer = async () => {
+        const name = prompt('Nhập tên khách hàng:', customerName);
+        const phone = prompt('Nhập số điện thoại:', customerPhone);
+        
+        if (!name || !phone) {
+            alert('Tên và số điện thoại là bắt buộc');
             return;
         }
         
@@ -129,15 +287,18 @@ const StaffDashboard = () => {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
-                body: JSON.stringify({ name: customerName, phoneNum: customerPhone })
+                body: JSON.stringify({ name, phoneNum: phone })
             });
             
             const data = await res.json();
             if (data.success) {
                 setCustomer(data.customer);
+                setCustomerName(data.customer.HoTen);
+                setCustomerPhone(data.customer.SoDienThoai);
+                alert('Đã tạo khách hàng mới thành công!');
                 
                 // Load pets if appointment
-                if (createType === 'appointment') {
+                if (createType === 'appointment' || showPetModal) {
                     const petsRes = await fetch(`${API_URL}/staff/customer/${data.customer.MaKhachHang}/pets`, {
                         headers: { 'Authorization': `Bearer ${token}` }
                     });
@@ -146,8 +307,8 @@ const StaffDashboard = () => {
                 }
             }
         } catch (error) {
-            console.error('Error finding customer:', error);
-            alert('Lỗi khi tìm khách hàng');
+            console.error('Error creating customer:', error);
+            alert('Lỗi khi tạo khách hàng');
         }
     };
 
@@ -282,6 +443,7 @@ const StaffDashboard = () => {
 
     const handleViewDetails = async (item, type) => {
         setDetailsType(type);
+        setDetailsData([]); // Reset data
         setShowDetailsModal(true);
         
         try {
@@ -296,9 +458,16 @@ const StaffDashboard = () => {
             }
             
             const data = await res.json();
-            if (data.success) setDetailsData(data.details);
+            console.log('Details response:', data); // Debug log
+            if (data.success) {
+                setDetailsData(data.details);
+            } else {
+                console.error('Failed to load details:', data.message);
+                alert('Không thể tải chi tiết: ' + (data.message || 'Lỗi không xác định'));
+            }
         } catch (error) {
             console.error('Error loading details:', error);
+            alert('Lỗi khi tải chi tiết');
         }
     };
 
@@ -452,7 +621,33 @@ const StaffDashboard = () => {
                     <h2 style={{ margin: 0, marginBottom: '5px' }}>🏥 Bảng điều khiển nhân viên</h2>
                     <p style={{ margin: 0, opacity: 0.9 }}>Xin chào, {user?.HoTen || user?.name}</p>
                 </div>
-                <button onClick={handleLogout} style={{...buttonStyle, backgroundColor: '#e74c3c'}}>Đăng xuất</button>
+                <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
+                        <label style={{ fontSize: '14px', opacity: 0.9 }}>Chi nhánh:</label>
+                        <select
+                            value={selectedBranch}
+                            onChange={(e) => setSelectedBranch(e.target.value)}
+                            style={{
+                                padding: '8px 12px',
+                                borderRadius: '4px',
+                                border: '1px solid rgba(255,255,255,0.3)',
+                                backgroundColor: 'rgba(255,255,255,0.1)',
+                                color: 'white',
+                                fontSize: '14px',
+                                cursor: 'pointer',
+                                minWidth: '200px'
+                            }}
+                        >
+                            <option value="">-- Chọn chi nhánh --</option>
+                            {branches?.map(branch => (
+                                <option key={branch.MaChiNhanh} value={branch.MaChiNhanh} style={{ color: '#2c3e50' }}>
+                                    {branch.TenChiNhanh}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    <button onClick={handleLogout} style={{...buttonStyle, backgroundColor: '#e74c3c'}}>Đăng xuất</button>
+                </div>
             </div>
 
             <div style={{ display: 'flex', gap: '15px', marginBottom: '20px' }}>
@@ -516,6 +711,7 @@ const StaffDashboard = () => {
                 customerPhone={customerPhone}
                 setCustomerPhone={setCustomerPhone}
                 customer={customer}
+                setCustomer={setCustomer}
                 customerPets={customerPets}
                 selectedPet={selectedPet}
                 setSelectedPet={setSelectedPet}
@@ -532,9 +728,15 @@ const StaffDashboard = () => {
                 modalContentStyle={modalContentStyle}
                 buttonStyle={buttonStyle}
                 inputStyle={inputStyle}
-                branchId={user?.MaChiNhanh}
+                branchId={selectedBranch}
                 apiUrl={API_URL}
                 token={localStorage.getItem('token')}
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
+                searchResults={searchResults}
+                showSearchResults={showSearchResults}
+                setShowSearchResults={setShowSearchResults}
+                onSelectCustomer={handleSelectCustomer}
             />
 
             <DetailsModal 
@@ -559,30 +761,71 @@ const StaffDashboard = () => {
                         {/* Customer Search Section */}
                         <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
                             <h3 style={{ marginTop: 0 }}>Tìm khách hàng</h3>
-                            <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
-                                <input 
-                                    style={inputStyle}
-                                    placeholder="Tên khách hàng"
-                                    value={customerName}
-                                    onChange={(e) => setCustomerName(e.target.value)}
-                                />
-                                <input 
-                                    style={inputStyle}
-                                    placeholder="Số điện thoại"
-                                    value={customerPhone}
-                                    onChange={(e) => setCustomerPhone(e.target.value)}
-                                />
-                                <button 
-                                    onClick={handleFindCustomer}
-                                    style={{...buttonStyle, backgroundColor: '#3498db'}}
-                                >
-                                    Tìm
-                                </button>
+                            <div style={{ position: 'relative', display: 'flex', gap: '10px', marginBottom: '10px' }}>
+                                <div style={{ flex: 1, position: 'relative' }}>
+                                    <input 
+                                        style={{...inputStyle, width: '100%'}}
+                                        placeholder="Tìm theo tên hoặc số điện thoại"
+                                        value={customer ? `${customer.HoTen} - ${customer.SoDienThoai}` : searchQuery}
+                                        onChange={(e) => setSearchQuery(e.target.value)}
+                                        onFocus={() => setShowSearchResults(searchResults.length > 0)}
+                                        disabled={customer !== null}
+                                    />
+                                    {showSearchResults && searchResults.length > 0 && (
+                                        <div style={{
+                                            position: 'absolute',
+                                            top: '100%',
+                                            left: 0,
+                                            right: 0,
+                                            backgroundColor: 'white',
+                                            border: '1px solid #ddd',
+                                            borderRadius: '4px',
+                                            maxHeight: '200px',
+                                            overflowY: 'auto',
+                                            zIndex: 1000,
+                                            boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+                                        }}>
+                                            {searchResults.map((result) => (
+                                                <div
+                                                    key={result.MaKhachHang}
+                                                    style={{
+                                                        padding: '10px',
+                                                        cursor: 'pointer',
+                                                        borderBottom: '1px solid #eee',
+                                                        transition: 'background-color 0.2s'
+                                                    }}
+                                                    onMouseEnter={(e) => e.target.style.backgroundColor = '#f0f0f0'}
+                                                    onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
+                                                    onClick={() => handleSelectCustomer(result)}
+                                                >
+                                                    <div style={{ fontWeight: 'bold' }}>{result.HoTen}</div>
+                                                    <div style={{ fontSize: '0.9em', color: '#666' }}>{result.SoDienThoai}</div>
+                                                    {result.Email && <div style={{ fontSize: '0.85em', color: '#999' }}>{result.Email}</div>}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                                {customer && (
+                                    <button 
+                                        onClick={() => {
+                                            setCustomer(null);
+                                            setCustomerName('');
+                                            setCustomerPhone('');
+                                            setSearchQuery('');
+                                            setSearchResults([]);
+                                            setShowSearchResults(false);
+                                        }}
+                                        style={{...buttonStyle, backgroundColor: '#e67e22', whiteSpace: 'nowrap'}}
+                                    >
+                                        Đổi khách
+                                    </button>
+                                )}
                             </div>
                             
                             {customer && (
                                 <div style={{ marginTop: '10px', padding: '10px', backgroundColor: '#d4edda', borderRadius: '4px', color: '#155724' }}>
-                                    ✓ Đã tìm thấy: {customer.HoTen} - {customer.SoDienThoai}
+                                    ✓ Đã chọn: <strong>{customer.HoTen}</strong> - {customer.SoDienThoai}
                                 </div>
                             )}
                         </div>

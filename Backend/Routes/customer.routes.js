@@ -19,5 +19,6 @@ cusRouter.get('/invoices/confirmed/:id', cusController.getConfirmedInvoices);
 cusRouter.get('/vaccinations/upcoming/:id', cusController.getUpcomingVaccinations);
 cusRouter.get('/appointment/:appointmentId/details', cusController.getAppointmentDetails);
 cusRouter.get('/order/:orderId/details', cusController.getOrderDetails);
+cusRouter.post('/rating', cusController.submitRating);
 
 export default cusRouter;

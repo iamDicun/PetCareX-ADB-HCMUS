@@ -404,7 +404,7 @@ async function getPendingAppointments(branchId, page = 1, limit = 10) {
                 LEFT JOIN HoaDon HD ON LH.MaHoaDon = HD.MaHoaDon
                 WHERE LH.MaChiNhanh = @branchId
                 AND LH.TrangThai = N'Chờ xác nhận'
-                ORDER BY LH.NgayGioHen DESC
+                ORDER BY LH.NgayGioHen ASC
                 OFFSET @offset ROWS
                 FETCH NEXT @limit ROWS ONLY
             `);
@@ -444,6 +444,8 @@ async function getOrderDetails(orderId) {
 async function getAppointmentDetails(appointmentId) {
     try {
         const pool = await poolPromise;
+        console.log('[getAppointmentDetails] Looking for appointment:', appointmentId);
+        
         const result = await pool.request()
             .input('appointmentId', sql.UniqueIdentifier, appointmentId)
             .query(`
@@ -456,6 +458,8 @@ async function getAppointmentDetails(appointmentId) {
                 LEFT JOIN NhanVien NV ON CTLH.MaBacSi = NV.MaNhanVien
                 WHERE CTLH.MaLichHen = @appointmentId
             `);
+        
+        console.log('[getAppointmentDetails] Found records:', result.recordset.length);
         return result.recordset;
     } catch (error) {
         console.error('[getAppointmentDetails] Error:', error.message, error);
@@ -680,6 +684,29 @@ async function getPetTypes() {
     }
 }
 
+// Search customers by name or phone
+async function searchCustomers(query) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('query', sql.NVarChar(100), `%${query}%`)
+            .query(`
+                SELECT 
+                    MaKhachHang,
+                    HoTen,
+                    SoDienThoai,
+                    Email
+                FROM KhachHang
+                WHERE HoTen LIKE @query OR SoDienThoai LIKE @query
+                ORDER BY HoTen
+            `);
+        return result.recordset;
+    } catch (error) {
+        console.error('[searchCustomers] Error:', error.message, error);
+        throw error;
+    }
+}
+
 export default {
     findByPhoneNum,
     findCustomerId,
@@ -700,5 +727,6 @@ export default {
     confirmAppointment,
     getCareStaffAppointments,
     registerPetForCustomer,
-    getPetTypes
+    getPetTypes,
+    searchCustomers
 };

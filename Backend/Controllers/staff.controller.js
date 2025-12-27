@@ -285,6 +285,20 @@ const staffController = {
         }
     },
 
+    async searchCustomers(req, res) {
+        const { query } = req.query;
+        try {
+            if (!query) {
+                return res.status(400).json({ success: false, message: 'Vui lòng nhập từ khóa tìm kiếm' });
+            }
+            const customers = await staffService.searchCustomers(query);
+            res.json({ success: true, customers });
+        } catch (error) {
+            console.error('[searchCustomers] Error:', error.message, error);
+            res.status(500).json({ success: false, message: 'Lỗi máy chủ' });
+        }
+    },
+
 };
 
 export default staffController;

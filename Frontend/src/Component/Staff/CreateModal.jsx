@@ -8,6 +8,7 @@ const CreateModal = ({
     customerPhone,
     setCustomerPhone,
     customer,
+    setCustomer,
     customerPets,
     selectedPet,
     setSelectedPet,
@@ -26,7 +27,13 @@ const CreateModal = ({
     inputStyle,
     branchId,
     apiUrl,
-    token
+    token,
+    searchQuery,
+    setSearchQuery,
+    searchResults,
+    showSearchResults,
+    setShowSearchResults,
+    onSelectCustomer
 }) => {
     // For appointment service items with staff assignment
     const [serviceStaffAssignments, setServiceStaffAssignments] = useState([]);
@@ -138,32 +145,69 @@ const CreateModal = ({
                 
                 <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#ecf0f1', borderRadius: '8px' }}>
                     <h4 style={{ marginTop: 0, color: '#34495e' }}>👤 Thông tin khách hàng</h4>
-                    <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
-                        <input
-                            type="text"
-                            placeholder="Tên khách hàng"
-                            value={customerName}
-                            onChange={(e) => setCustomerName(e.target.value)}
-                            style={inputStyle}
-                            disabled={customer !== null}
-                        />
-                        <input
-                            type="text"
-                            placeholder="Số điện thoại"
-                            value={customerPhone}
-                            onChange={(e) => setCustomerPhone(e.target.value)}
-                            style={inputStyle}
-                            disabled={customer !== null}
-                        />
-                        {!customer && (
-                            <button onClick={onFindCustomer} style={{...buttonStyle, backgroundColor: '#3498db', whiteSpace: 'nowrap'}}>
-                                Tìm kiếm
+                    <div style={{ position: 'relative', display: 'flex', gap: '10px', marginBottom: '10px' }}>
+                        <div style={{ flex: 1, position: 'relative' }}>
+                            <input
+                                type="text"
+                                placeholder="Tìm theo tên hoặc số điện thoại"
+                                value={customer ? `${customer.HoTen} - ${customer.SoDienThoai}` : searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onFocus={() => setShowSearchResults(searchResults.length > 0)}
+                                style={{...inputStyle, width: '100%'}}
+                                disabled={customer !== null}
+                            />
+                            {showSearchResults && searchResults.length > 0 && (
+                                <div style={{
+                                    position: 'absolute',
+                                    top: '100%',
+                                    left: 0,
+                                    right: 0,
+                                    backgroundColor: 'white',
+                                    border: '1px solid #ddd',
+                                    borderRadius: '4px',
+                                    maxHeight: '200px',
+                                    overflowY: 'auto',
+                                    zIndex: 1000,
+                                    boxShadow: '0 4px 6px rgba(0,0,0,0.1)'
+                                }}>
+                                    {searchResults.map((result) => (
+                                        <div
+                                            key={result.MaKhachHang}
+                                            style={{
+                                                padding: '10px',
+                                                cursor: 'pointer',
+                                                borderBottom: '1px solid #eee',
+                                                transition: 'background-color 0.2s'
+                                            }}
+                                            onMouseEnter={(e) => e.target.style.backgroundColor = '#f0f0f0'}
+                                            onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
+                                            onClick={() => onSelectCustomer(result)}
+                                        >
+                                            <div style={{ fontWeight: 'bold' }}>{result.HoTen}</div>
+                                            <div style={{ fontSize: '0.9em', color: '#666' }}>{result.SoDienThoai}</div>
+                                            {result.Email && <div style={{ fontSize: '0.85em', color: '#999' }}>{result.Email}</div>}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        {customer && (
+                            <button 
+                                onClick={() => {
+                                    setCustomer(null);
+                                    setCustomerName('');
+                                    setCustomerPhone('');
+                                    setSearchQuery('');
+                                }} 
+                                style={{...buttonStyle, backgroundColor: '#e67e22', whiteSpace: 'nowrap'}}
+                            >
+                                Đổi khách
                             </button>
                         )}
                     </div>
                     {customer && (
                         <div style={{ padding: '10px', backgroundColor: '#d4edda', borderRadius: '5px', color: '#155724' }}>
-                            ✓ Đã tìm thấy: <strong>{customer.HoTen}</strong> - {customer.SoDienThoai}
+                            ✓ Đã chọn: <strong>{customer.HoTen}</strong> - {customer.SoDienThoai}
                         </div>
                     )}
                 </div>

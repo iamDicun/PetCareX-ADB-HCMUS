@@ -91,7 +91,7 @@ const companyManagerService = {
                         FROM ChiNhanh 
                         WHERE TrangThai = N'Hoạt động'`);
             
-            return { success: true, data: result.recordset };
+            return { success: true, branches: result.recordset };
         } catch (error) {
             console.error('Error in getAllBranches:', error);
             return { success: false, message: error.message };

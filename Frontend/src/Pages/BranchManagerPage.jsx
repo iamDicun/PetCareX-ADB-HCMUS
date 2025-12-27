@@ -6,6 +6,8 @@ import OrdersTab from '../Component/BranchManager/OrdersTab';
 import EmployeesTab from '../Component/BranchManager/EmployeesTab';
 import ProductsTab from '../Component/BranchManager/ProductsTab';
 import InventoryTab from '../Component/BranchManager/InventoryTab';
+import ImportHistoryTab from '../Component/BranchManager/ImportHistoryTab';
+import RequestImportModal from '../Component/BranchManager/RequestImportModal';
 import * as branchService from '../Component/BranchManager/branchService';
 import * as styles from '../Component/BranchManager/styles';
 
@@ -16,7 +18,7 @@ const BranchManagerPage = () => {
     // States
     const [activeTab, setActiveTab] = useState('revenue');
     const [dateRange, setDateRange] = useState({
-        tuNgay: '2025-01-01', // Lấy từ đầu năm
+        tuNgay: new Date(new Date().setDate(new Date().getDate() - 30)).toISOString().split('T')[0],
         denNgay: new Date().toISOString().split('T')[0]
     });
     
@@ -34,6 +36,10 @@ const BranchManagerPage = () => {
     const [inventory, setInventory] = useState([]);
     const [inventoryPagination, setInventoryPagination] = useState(null);
     const [currentInventoryPage, setCurrentInventoryPage] = useState(1);
+    const [importHistory, setImportHistory] = useState([]);
+    const [importPagination, setImportPagination] = useState(null);
+    const [currentImportPage, setCurrentImportPage] = useState(1);
+    const [showRequestModal, setShowRequestModal] = useState(false);
     const [loading, setLoading] = useState(false);
 
     // Fetch functions với error handling
@@ -167,6 +173,44 @@ const BranchManagerPage = () => {
         }
     };
 
+    const handleFetchImportHistory = async (page = 1) => {
+        try {
+            setLoading(true);
+            const result = await branchService.fetchImportHistory(
+                user?.MaChiNhanh,
+                page,
+                10
+            );
+            setImportHistory(result.data || []);
+            setImportPagination(result.pagination);
+            setCurrentImportPage(page);
+        } catch (error) {
+            console.error('Lỗi khi lấy lịch sử nhập hàng:', error);
+            alert('Không thể lấy lịch sử nhập hàng');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleOpenRequestModal = () => {
+        setShowRequestModal(true);
+    };
+
+    const handleCloseRequestModal = () => {
+        setShowRequestModal(false);
+    };
+
+    const handleRequestSuccess = () => {
+        handleFetchImportHistory(1);
+        if (activeTab === 'inventory') {
+            handleFetchInventory(currentInventoryPage);
+        }
+    };
+
+    const handleViewImportDetails = (maYeuCau) => {
+        alert(`Chi tiết yêu cầu: ${maYeuCau}\nTính năng đang phát triển`);
+    };
+
     // Load dữ liệu khi tab thay đổi
     useEffect(() => {
         switch (activeTab) {
@@ -184,6 +228,9 @@ const BranchManagerPage = () => {
                 break;
             case 'inventory':
                 handleFetchInventory();
+                break;
+            case 'import-history':
+                handleFetchImportHistory();
                 break;
             default:
                 break;
@@ -297,6 +344,21 @@ const BranchManagerPage = () => {
                         inventoryPagination={inventoryPagination}
                         currentInventoryPage={currentInventoryPage}
                         onInventoryPageChange={handleFetchInventory}
+                        onOpenRequestModal={handleOpenRequestModal}
+                        tableStyle={styles.tableStyle}
+                        thStyle={styles.thStyle}
+                        tdStyle={styles.tdStyle}
+                    />
+                );
+
+            case 'import-history':
+                return (
+                    <ImportHistoryTab
+                        importHistory={importHistory}
+                        importPagination={importPagination}
+                        currentImportPage={currentImportPage}
+                        onImportPageChange={handleFetchImportHistory}
+                        onViewDetails={handleViewImportDetails}
                         tableStyle={styles.tableStyle}
                         thStyle={styles.thStyle}
                         tdStyle={styles.tdStyle}
@@ -352,11 +414,24 @@ const BranchManagerPage = () => {
                 >
                     Tồn kho
                 </button>
+                <button
+                    style={styles.tabButtonStyle(activeTab === 'import-history')}
+                    onClick={() => setActiveTab('import-history')}
+                >
+                    Lịch sử nhập hàng
+                </button>
             </div>
 
             <div style={styles.contentStyle}>
                 {renderTabContent()}
             </div>
+
+            <RequestImportModal
+                isOpen={showRequestModal}
+                onClose={handleCloseRequestModal}
+                onSuccess={handleRequestSuccess}
+                branchId={user?.MaChiNhanh}
+            />
         </div>
     );
 };

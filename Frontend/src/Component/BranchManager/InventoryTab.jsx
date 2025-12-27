@@ -5,6 +5,7 @@ const InventoryTab = ({
     inventoryPagination,
     currentInventoryPage,
     onInventoryPageChange,
+    onOpenRequestModal,
     tableStyle, 
     thStyle, 
     tdStyle 
@@ -34,7 +35,24 @@ const InventoryTab = ({
 
     return (
         <div>
-            <h2>Tồn kho Chi nhánh</h2>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
+                <h2>Tồn kho Chi nhánh</h2>
+                <button 
+                    onClick={onOpenRequestModal}
+                    style={{
+                        padding: '10px 20px',
+                        backgroundColor: '#27ae60',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: '4px',
+                        cursor: 'pointer',
+                        fontSize: '16px',
+                        fontWeight: 'bold'
+                    }}
+                >
+                    + Tạo yêu cầu nhập hàng
+                </button>
+            </div>
             {inventory && inventory.length > 0 ? (
                 <>
                     <table style={tableStyle}>

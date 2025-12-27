@@ -62,3 +62,27 @@ export const fetchInventory = async (MaChiNhanh, page = 1, limit = 10) => {
     });
     return response.data;
 };
+
+// Lấy tất cả sản phẩm (không phân trang)
+export const fetchAllProducts = async () => {
+    const response = await axios.get(`${API_URL}/products`, getAuthHeaders());
+    return response.data.data || [];
+};
+
+// Tạo yêu cầu nhập hàng
+export const createImportRequest = async (MaChiNhanh, items) => {
+    const response = await axios.post(`${API_URL}/import-request`, 
+        { MaChiNhanh, items },
+        getAuthHeaders()
+    );
+    return response.data;
+};
+
+// Lấy lịch sử yêu cầu nhập hàng
+export const fetchImportHistory = async (MaChiNhanh, page = 1, limit = 10) => {
+    const response = await axios.get(`${API_URL}/import-history`, {
+        ...getAuthHeaders(),
+        params: { MaChiNhanh, page, limit }
+    });
+    return response.data;
+};

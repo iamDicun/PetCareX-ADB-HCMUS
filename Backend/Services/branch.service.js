@@ -1,5 +1,6 @@
 import sql from 'mssql';
 import { poolPromise } from '../Config/db.js';
+import customerService from './customer.service.js';
 
 // Lấy doanh thu chi nhánh theo dịch vụ và sản phẩm
 const getRevenueByServiceAndProduct = async (MaChiNhanh, TuNgay, DenNgay) => {
@@ -171,11 +172,105 @@ const getBranchInventory = async (MaChiNhanh, page = 1, limit = 10) => {
     }
 };
 
+// Sử dụng hàm getProducts từ customer.service để tránh duplicate code
+const getAllProducts = customerService.getProducts;
+
+// Tạo yêu cầu nhập hàng
+const createImportRequest = async (MaChiNhanh, items) => {
+    try {
+        const pool = await poolPromise;
+        const transaction = pool.transaction();
+        
+        await transaction.begin();
+        
+        try {
+            // Tạo yêu cầu nhập hàng
+            const requestResult = await transaction.request()
+                .input('MaChiNhanh', sql.UniqueIdentifier, MaChiNhanh)
+                .input('TrangThai', sql.NVarChar, 'Mới')
+                .query(`
+                    INSERT INTO YeuCauNhapHang (MaChiNhanh, NgayYeuCau, TrangThai)
+                    OUTPUT INSERTED.MaYeuCau
+                    VALUES (@MaChiNhanh, GETDATE(), @TrangThai)
+                `);
+            
+            const MaYeuCau = requestResult.recordset[0].MaYeuCau;
+            
+            // Thêm chi tiết yêu cầu nhập hàng
+            for (const item of items) {
+                await transaction.request()
+                    .input('MaYeuCau', sql.UniqueIdentifier, MaYeuCau)
+                    .input('MaSanPham', sql.UniqueIdentifier, item.MaSanPham)
+                    .input('SoLuong', sql.Int, item.SoLuong)
+                    .query(`
+                        INSERT INTO ChiTietYeuCauNhap (MaYeuCau, MaSanPham, SoLuong)
+                        VALUES (@MaYeuCau, @MaSanPham, @SoLuong)
+                    `);
+            }
+            
+            await transaction.commit();
+            
+            return { MaYeuCau };
+        } catch (error) {
+            await transaction.rollback();
+            throw error;
+        }
+    } catch (error) {
+        console.error('Lỗi trong createImportRequest:', error);
+        throw error;
+    }
+};
+
+// Lấy lịch sử yêu cầu nhập hàng
+const getImportHistory = async (MaChiNhanh, page = 1, limit = 10) => {
+    try {
+        const pool = await poolPromise;
+        const offset = (page - 1) * limit;
+        
+        const result = await pool.request()
+            .input('MaChiNhanh', sql.UniqueIdentifier, MaChiNhanh)
+            .query(`
+                SELECT 
+                    ycnh.MaYeuCau,
+                    ycnh.NgayYeuCau,
+                    ycnh.TrangThai,
+                    COUNT(DISTINCT ctycn.MaSanPham) AS SoLoaiSanPham,
+                    SUM(ctycn.SoLuong) AS TongSoLuong
+                FROM YeuCauNhapHang ycnh
+                LEFT JOIN ChiTietYeuCauNhap ctycn ON ycnh.MaYeuCau = ctycn.MaYeuCau
+                WHERE ycnh.MaChiNhanh = @MaChiNhanh
+                GROUP BY ycnh.MaYeuCau, ycnh.NgayYeuCau, ycnh.TrangThai
+                ORDER BY ycnh.NgayYeuCau DESC
+            `);
+        
+        // Apply pagination to results
+        const data = result.recordset || [];
+        const total = data.length;
+        const paginatedData = data.slice(offset, offset + limit);
+        
+        return {
+            data: paginatedData,
+            pagination: {
+                page: page,
+                limit: limit,
+                total: total,
+                totalPages: Math.ceil(total / limit)
+            }
+        };
+    } catch (error) {
+        console.error('Lỗi trong getImportHistory:', error);
+        throw error;
+    }
+};
+
 export default {
     getRevenueByServiceAndProduct,
     getOrdersByDateRange,
     getEmployeeRatings,
     getEmployeePerformance,
     getTopProducts,
-    getBranchInventory
+    getBranchInventory,
+    getAllProducts,
+    createImportRequest,
+    getImportHistory
 };

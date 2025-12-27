@@ -24,6 +24,7 @@ router.get('/branches', companyManagerController.getAllBranches);
 router.get('/import-requests/pending', companyManagerController.getPendingImportRequests);
 router.get('/import-requests/:requestId/details', companyManagerController.getImportRequestDetails);
 router.post('/import-requests/:requestId/approve', companyManagerController.approveImportRequest);
+router.post('/import-requests/:requestId/complete', companyManagerController.completeImportRequest);
 
 // Employee transfer management
 router.get('/employees', companyManagerController.getAllEmployees);

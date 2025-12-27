@@ -859,7 +859,7 @@ GO
 
 
 -- trigger h
-USE PetCareX_test_TR;
+USE PetCareX;
 GO
 
 CREATE OR ALTER TRIGGER TR_YeuCauNhapHang_HoanTat_TangKho

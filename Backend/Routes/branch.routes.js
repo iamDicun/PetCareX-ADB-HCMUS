@@ -25,4 +25,13 @@ branchRouter.get('/top-products', branchController.getTopProducts);
 // Tồn kho của chi nhánh
 branchRouter.get('/inventory', branchController.getBranchInventory);
 
+// Lấy tất cả sản phẩm
+branchRouter.get('/products', branchController.getAllProducts);
+
+// Tạo yêu cầu nhập hàng
+branchRouter.post('/import-request', branchController.createImportRequest);
+
+// Lấy lịch sử yêu cầu nhập hàng
+branchRouter.get('/import-history', branchController.getImportHistory);
+
 export default branchRouter;

@@ -61,10 +61,11 @@ const CompanyManagerPage = () => {
             const res = await fetch('http://localhost:5000/api/company-manager/branches');
             const data = await res.json();
             if (data.success) {
-                setBranches(data.data);
+                setBranches(data.branches || []);
             }
         } catch (error) {
             console.error('Error fetching branches:', error);
+            setBranches([]);
         }
     };
 
@@ -74,10 +75,11 @@ const CompanyManagerPage = () => {
             const res = await fetch(`http://localhost:5000/api/company-manager/hot-services?top=${topN}`);
             const data = await res.json();
             if (data.success) {
-                setHotServices(data.data);
+                setHotServices(data.data || []);
             }
         } catch (error) {
             console.error('Error fetching hot services:', error);
+            setHotServices([]);
         } finally {
             setLoading(false);
         }
@@ -89,10 +91,11 @@ const CompanyManagerPage = () => {
             const res = await fetch(`http://localhost:5000/api/company-manager/system-revenue?year=${selectedYear}`);
             const data = await res.json();
             if (data.success) {
-                setSystemRevenue(data.data);
+                setSystemRevenue(data.data || []);
             }
         } catch (error) {
             console.error('Error fetching system revenue:', error);
+            setSystemRevenue([]);
         } finally {
             setLoading(false);
         }
@@ -104,10 +107,11 @@ const CompanyManagerPage = () => {
             const res = await fetch(`http://localhost:5000/api/company-manager/top-revenue-services?months=${selectedMonths}`);
             const data = await res.json();
             if (data.success) {
-                setTopRevenueServices(data.data);
+                setTopRevenueServices(data.data || []);
             }
         } catch (error) {
             console.error('Error fetching top revenue services:', error);
+            setTopRevenueServices([]);
         } finally {
             setLoading(false);
         }
@@ -120,10 +124,11 @@ const CompanyManagerPage = () => {
             const res = await fetch(`http://localhost:5000/api/company-manager/best-selling-products?top=${topN}${branchParam}`);
             const data = await res.json();
             if (data.success) {
-                setBestSellingProducts(data.data);
+                setBestSellingProducts(data.data || []);
             }
         } catch (error) {
             console.error('Error fetching best selling products:', error);
+            setBestSellingProducts([]);
         } finally {
             setLoading(false);
         }
@@ -136,10 +141,11 @@ const CompanyManagerPage = () => {
             const res = await fetch(`http://localhost:5000/api/company-manager/employee-ratings${branchParam}`);
             const data = await res.json();
             if (data.success) {
-                setEmployeeRatings(data.data);
+                setEmployeeRatings(data.data || []);
             }
         } catch (error) {
             console.error('Error fetching employee ratings:', error);
+            setEmployeeRatings([]);
         } finally {
             setLoading(false);
         }
@@ -195,6 +201,31 @@ const CompanyManagerPage = () => {
             }
         } catch (error) {
             console.error('Error approving request:', error);
+            alert('Có lỗi xảy ra');
+        }
+    };
+
+    const handleCompleteRequest = async (requestId) => {
+        if (!window.confirm('Bạn có chắc chắn đã giao hàng xong và muốn hoàn tất yêu cầu này?')) {
+            return;
+        }
+
+        try {
+            const res = await fetch(`http://localhost:5000/api/company-manager/import-requests/${requestId}/complete`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert(data.message);
+                fetchImportRequests();
+                setSelectedRequest(null);
+                setRequestDetails([]);
+            } else {
+                alert('Lỗi: ' + data.message);
+            }
+        } catch (error) {
+            console.error('Error completing request:', error);
             alert('Có lỗi xảy ra');
         }
     };
@@ -675,7 +706,8 @@ const CompanyManagerPage = () => {
                                                         <td style={tdStyle}>{request.TongSoLuong}</td>
                                                         <td style={tdStyle}>
                                                             <span style={{
-                                                                color: request.TrangThai === 'Mới' ? '#e74c3c' : '#3498db',
+                                                                color: request.TrangThai === 'Mới' ? '#e74c3c' : 
+                                                                       request.TrangThai === 'Đã duyệt' ? '#f39c12' : '#3498db',
                                                                 fontWeight: 'bold'
                                                             }}>
                                                                 {request.TrangThai}
@@ -703,6 +735,14 @@ const CompanyManagerPage = () => {
                                                                         Từ chối
                                                                     </button>
                                                                 </>
+                                                            )}
+                                                            {request.TrangThai === 'Đã duyệt' && (
+                                                                <button 
+                                                                    onClick={() => handleCompleteRequest(request.MaYeuCau)}
+                                                                    style={{...filterButtonStyle, backgroundColor: '#9b59b6'}}
+                                                                >
+                                                                    Hoàn tất
+                                                                </button>
                                                             )}
                                                         </td>
                                                     </tr>

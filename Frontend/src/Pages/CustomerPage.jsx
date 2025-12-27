@@ -12,7 +12,6 @@ const CustomerPage = () => {
     const [history, setHistory] = useState([]);
     const [searchKeyword, setSearchKeyword] = useState('');
     const [searchResults, setSearchResults] = useState([]);
-    const [petTypes, setPetTypes] = useState([]);
     const [branches, setBranches] = useState([]);
     const [selectedPet, setSelectedPet] = useState(null);
     const [suitableProducts, setSuitableProducts] = useState([]);
@@ -23,10 +22,7 @@ const CustomerPage = () => {
     const [showCheckoutModal, setShowCheckoutModal] = useState(false);
     const [checkoutBranch, setCheckoutBranch] = useState('');
 
-    // Forms state
-    const [newPet, setNewPet] = useState({
-        TenThuCung: '', Giong: '', NgaySinh: '', GioiTinh: 'Đực', CanNang: '', TinhTrangSK: '', MaLoaiTC: ''
-    });
+    // Forms state (removed newPet - no longer allowing pet registration)
     const [booking, setBooking] = useState({
         MaChiNhanh: '', MaThuCung: '', NgayGioHen: '', DichVu: [] // Array of {MaDichVu, MaBacSi}
     });
@@ -58,18 +54,16 @@ const CustomerPage = () => {
 
     const fetchData = async () => {
         try {
-            const [prodRes, servRes, petRes, histRes, typeRes, branchRes] = await Promise.all([
+            const [prodRes, servRes, petRes, histRes, branchRes] = await Promise.all([
                 fetch('http://localhost:5000/api/customer/products').then(res => res.json()),
                 fetch('http://localhost:5000/api/customer/services').then(res => res.json()),
                 fetch(`http://localhost:5000/api/customer/pets/${user.MaKhachHang}`).then(res => res.json()),
                 fetch(`http://localhost:5000/api/customer/history/${user.MaKhachHang}`).then(res => res.json()),
-                fetch('http://localhost:5000/api/customer/pet-types').then(res => res.json()),
                 fetch('http://localhost:5000/api/customer/branches').then(res => res.json())
             ]);
 
             if (prodRes.success) setProducts(prodRes.data);
             if (servRes.success) setServices(servRes.data);
-            if (typeRes.success) setPetTypes(typeRes.data);
             if (histRes.success) setHistory(histRes.data);
             if (branchRes.success) setBranches(branchRes.data);
             
@@ -163,30 +157,9 @@ const CustomerPage = () => {
         }
     };
 
-    const handleRegisterPet = async (e) => {
-        e.preventDefault();
-        try {
-            const res = await fetch('http://localhost:5000/api/customer/register-pet', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...newPet, MaKhachHang: user.MaKhachHang })
-            });
-            const data = await res.json();
-            if (data.success) {
-                alert('Đăng ký thú cưng thành công!');
-                fetchData();
-                setNewPet({ TenThuCung: '', Giong: '', NgaySinh: '', GioiTinh: 'Đực', CanNang: '', TinhTrangSK: '', MaLoaiTC: '' });
-            } else {
-                alert(data.message);
-            }
-        } catch (error) {
-            console.error("Register pet error:", error);
-        }
-    };
-
     const addToCart = (product) => {
-        const existing = cart.find(item => item.MaSanPham === product.MaSanPham);
-        if (existing) {
+        const existingItem = cart.find(item => item.MaSanPham === product.MaSanPham);
+        if (existingItem) {
             setCart(cart.map(item => item.MaSanPham === product.MaSanPham ? { ...item, SoLuong: item.SoLuong + 1 } : item));
         } else {
             setCart([...cart, { ...product, SoLuong: 1 }]);
@@ -384,61 +357,38 @@ const CustomerPage = () => {
 
             {activeTab === 'pets' && (
                 <div>
-                    <div style={{display: 'flex', gap: '20px'}}>
-                        <div style={{flex: 1}}>
-                            <h3>Danh sách thú cưng</h3>
+                    <h3>Danh sách thú cưng của bạn</h3>
+                    <div style={gridStyle}>
+                        {pets.map(p => (
+                            <div key={p.MaThuCung} style={cardStyle}>
+                                <h4>{p.TenThuCung}</h4>
+                                <p>Giống: {p.Giong}</p>
+                                <p>Cân nặng: {p.CanNang} kg</p>
+                                <button 
+                                    onClick={() => handleViewSuitableProducts(p.MaThuCung)} 
+                                    style={{...buttonStyle, backgroundColor: '#9b59b6', marginTop: '10px'}}
+                                >
+                                    Xem sản phẩm phù hợp
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                    
+                    {selectedPet && suitableProducts.length > 0 && (
+                        <div style={{marginTop: '30px', padding: '20px', backgroundColor: '#f9f9f9', borderRadius: '8px'}}>
+                            <h3>Sản phẩm phù hợp cho {selectedPet.TenThuCung}</h3>
                             <div style={gridStyle}>
-                                {pets.map(p => (
-                                    <div key={p.MaThuCung} style={cardStyle}>
-                                        <h4>{p.TenThuCung}</h4>
-                                        <p>Giống: {p.Giong}</p>
-                                        <p>Cân nặng: {p.CanNang} kg</p>
-                                        <button 
-                                            onClick={() => handleViewSuitableProducts(p.MaThuCung)} 
-                                            style={{...buttonStyle, backgroundColor: '#9b59b6', marginTop: '10px'}}
-                                        >
-                                            Xem sản phẩm phù hợp
-                                        </button>
+                                {suitableProducts.map(sp => (
+                                    <div key={sp.MaSanPham} style={cardStyle}>
+                                        <h4>{sp.TenSanPham}</h4>
+                                        <p>Giá: {sp.GiaBan.toLocaleString()} VND</p>
+                                        <p style={{fontSize: '12px', color: '#7f8c8d'}}>Phù hợp với: {sp.PhuHopVoiLoai}</p>
+                                        <button onClick={() => addToCart(sp)} style={buttonStyle}>Thêm vào giỏ</button>
                                     </div>
                                 ))}
                             </div>
-                            
-                            {selectedPet && suitableProducts.length > 0 && (
-                                <div style={{marginTop: '30px', padding: '20px', backgroundColor: '#f9f9f9', borderRadius: '8px'}}>
-                                    <h3>Sản phẩm phù hợp cho {selectedPet.TenThuCung}</h3>
-                                    <div style={gridStyle}>
-                                        {suitableProducts.map(sp => (
-                                            <div key={sp.MaSanPham} style={cardStyle}>
-                                                <h4>{sp.TenSanPham}</h4>
-                                                <p>Giá: {sp.GiaBan.toLocaleString()} VND</p>
-                                                <p style={{fontSize: '12px', color: '#7f8c8d'}}>Phù hợp với: {sp.PhuHopVoiLoai}</p>
-                                                <button onClick={() => addToCart(sp)} style={buttonStyle}>Thêm vào giỏ</button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
                         </div>
-                        <div style={{flex: 1, borderLeft: '1px solid #eee', paddingLeft: '20px'}}>
-                            <h3>Đăng ký thú cưng mới</h3>
-                            <form onSubmit={handleRegisterPet} style={formStyle}>
-                                <input style={inputStyle} placeholder="Tên thú cưng" value={newPet.TenThuCung} onChange={e => setNewPet({...newPet, TenThuCung: e.target.value})} required />
-                                <select style={inputStyle} value={newPet.MaLoaiTC} onChange={e => setNewPet({...newPet, MaLoaiTC: e.target.value})} required>
-                                    <option value="">Chọn loại thú cưng</option>
-                                    {petTypes.map(t => <option key={t.MaLoaiTC} value={t.MaLoaiTC}>{t.TenLoai}</option>)}
-                                </select>
-                                <input style={inputStyle} placeholder="Giống" value={newPet.Giong} onChange={e => setNewPet({...newPet, Giong: e.target.value})} />
-                                <input style={inputStyle} type="date" value={newPet.NgaySinh} onChange={e => setNewPet({...newPet, NgaySinh: e.target.value})} />
-                                <select style={inputStyle} value={newPet.GioiTinh} onChange={e => setNewPet({...newPet, GioiTinh: e.target.value})}>
-                                    <option value="Đực">Đực</option>
-                                    <option value="Cái">Cái</option>
-                                </select>
-                                <input style={inputStyle} type="number" placeholder="Cân nặng (kg)" value={newPet.CanNang} onChange={e => setNewPet({...newPet, CanNang: e.target.value})} />
-                                <textarea style={inputStyle} placeholder="Tình trạng sức khỏe" value={newPet.TinhTrangSK} onChange={e => setNewPet({...newPet, TinhTrangSK: e.target.value})} />
-                                <button type="submit" style={buttonStyle}>Đăng ký</button>
-                            </form>
-                        </div>
-                    </div>
+                    )}
                 </div>
             )}
 

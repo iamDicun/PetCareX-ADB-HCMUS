@@ -42,7 +42,7 @@ async function findCusPets(cusId) {
     try {
         const pool = await poolPromise;
         const result = await pool.request()
-            .input('cusId', sql.Int, cusId)
+            .input('cusId', sql.UniqueIdentifier, cusId)
             .query('SELECT * FROM ThuCung WHERE MaKhachHang = @cusId');
         return result.recordset;
     } catch (error) {
@@ -645,6 +645,41 @@ async function getCareStaffAppointments(staffId) {
     }
 }
 
+async function registerPetForCustomer(data) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('MaKhachHang', sql.UniqueIdentifier, data.MaKhachHang)
+            .input('MaLoaiTC', sql.VarChar, data.MaLoaiTC)
+            .input('TenThuCung', sql.NVarChar, data.TenThuCung)
+            .input('Giong', sql.NVarChar, data.Giong || null)
+            .input('NgaySinh', sql.Date, data.NgaySinh || null)
+            .input('GioiTinh', sql.NVarChar, data.GioiTinh)
+            .input('CanNang', sql.Float, data.CanNang || null)
+            .input('TinhTrangSK', sql.NVarChar, data.TinhTrangSK || null)
+            .query(`
+                INSERT INTO ThuCung (MaKhachHang, MaLoaiTC, TenThuCung, Giong, NgaySinh, GioiTinh, CanNang, TinhTrangSK)
+                VALUES (@MaKhachHang, @MaLoaiTC, @TenThuCung, @Giong, @NgaySinh, @GioiTinh, @CanNang, @TinhTrangSK)
+            `);
+        return result;
+    } catch (error) {
+        console.error('[registerPetForCustomer] Error:', error.message, error);
+        throw error;
+    }
+}
+
+async function getPetTypes() {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .query('SELECT MaLoaiTC, TenLoai FROM LoaiThuCung');
+        return result.recordset;
+    } catch (error) {
+        console.error('[getPetTypes] Error:', error.message, error);
+        throw error;
+    }
+}
+
 export default {
     findByPhoneNum,
     findCustomerId,
@@ -664,4 +699,6 @@ export default {
     confirmOrder,
     confirmAppointment,
     getCareStaffAppointments,
+    registerPetForCustomer,
+    getPetTypes
 };

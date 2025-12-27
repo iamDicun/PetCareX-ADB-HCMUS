@@ -46,6 +46,58 @@ const staffController = {
         }
     },
 
+    async getPetTypes(req, res) {
+        try {
+            const petTypes = await staffService.getPetTypes();
+            res.json({ success: true, petTypes });
+        } catch (error) {
+            console.error('[getPetTypes] Error:', error.message, error);
+            res.status(500).json({ success: false, message: 'Lỗi máy chủ' });
+        }
+    },
+
+    async registerPet(req, res) {
+        try {
+            // Check if user is a doctor - doctors cannot register pets
+            const staffId = req.user?.id || req.user?.MaNhanVien;
+            if (staffId) {
+                const staffInfo = await staffService.findByPhoneNum(req.body.staffPhone || '');
+                if (staffInfo && staffInfo.ChucVu === 'Bác sĩ thú y') {
+                    return res.status(403).json({ 
+                        success: false, 
+                        message: 'Bác sĩ không có quyền đăng ký thú cưng cho khách hàng' 
+                    });
+                }
+            }
+            
+            const { maKhachHang, maLoaiTC, tenThuCung, giong, ngaySinh, gioiTinh, canNang, tinhTrangSK } = req.body;
+            
+            if (!maKhachHang || !maLoaiTC || !tenThuCung || !gioiTinh) {
+                return res.status(400).json({ 
+                    success: false, 
+                    message: 'Vui lòng cung cấp đầy đủ thông tin bắt buộc' 
+                });
+            }
+
+            const petData = {
+                MaKhachHang: maKhachHang,
+                MaLoaiTC: maLoaiTC,
+                TenThuCung: tenThuCung,
+                Giong: giong,
+                NgaySinh: ngaySinh,
+                GioiTinh: gioiTinh,
+                CanNang: canNang,
+                TinhTrangSK: tinhTrangSK
+            };
+
+            await staffService.registerPetForCustomer(petData);
+            res.json({ success: true, message: 'Đăng ký thú cưng thành công' });
+        } catch (error) {
+            console.error('[registerPet] Error:', error.message, error);
+            res.status(500).json({ success: false, message: 'Lỗi máy chủ' });
+        }
+    },
+
     async getServices(req, res) {
         try {
             const services = await staffService.getServices();

@@ -21,6 +21,13 @@ const StaffDashboard = () => {
     const [customerPets, setCustomerPets] = useState([]);
     const [selectedPet, setSelectedPet] = useState('');
     
+    // Pet registration states
+    const [showPetModal, setShowPetModal] = useState(false);
+    const [petTypes, setPetTypes] = useState([]);
+    const [newPet, setNewPet] = useState({
+        TenThuCung: '', Giong: '', NgaySinh: '', GioiTinh: 'Đực', CanNang: '', TinhTrangSK: '', MaLoaiTC: ''
+    });
+    
     // Products and Services
     const [products, setProducts] = useState([]);
     const [services, setServices] = useState([]);
@@ -349,6 +356,78 @@ const StaffDashboard = () => {
         }
     };
 
+    const handleOpenPetModal = async () => {
+        setShowPetModal(true);
+        setCustomer(null);
+        setCustomerName('');
+        setCustomerPhone('');
+        setNewPet({
+            TenThuCung: '', Giong: '', NgaySinh: '', GioiTinh: 'Đực', CanNang: '', TinhTrangSK: '', MaLoaiTC: ''
+        });
+        
+        // Load pet types
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_URL}/staff/pet-types`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (data.success) setPetTypes(data.petTypes);
+        } catch (error) {
+            console.error('Error loading pet types:', error);
+        }
+    };
+
+    const handleRegisterPet = async () => {
+        if (!customer) {
+            alert('Vui lòng tìm khách hàng trước');
+            return;
+        }
+        
+        if (!newPet.TenThuCung || !newPet.MaLoaiTC || !newPet.GioiTinh) {
+            alert('Vui lòng nhập đầy đủ thông tin bắt buộc');
+            return;
+        }
+        
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_URL}/staff/customer/register-pet`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    maKhachHang: customer.MaKhachHang,
+                    maLoaiTC: newPet.MaLoaiTC,
+                    tenThuCung: newPet.TenThuCung,
+                    giong: newPet.Giong,
+                    ngaySinh: newPet.NgaySinh,
+                    gioiTinh: newPet.GioiTinh,
+                    canNang: newPet.CanNang,
+                    tinhTrangSK: newPet.TinhTrangSK
+                })
+            });
+            
+            const data = await res.json();
+            if (data.success) {
+                alert('Đăng ký thú cưng thành công!');
+                setShowPetModal(false);
+                setCustomer(null);
+                setCustomerName('');
+                setCustomerPhone('');
+                setNewPet({
+                    TenThuCung: '', Giong: '', NgaySinh: '', GioiTinh: 'Đực', CanNang: '', TinhTrangSK: '', MaLoaiTC: ''
+                });
+            } else {
+                alert('Lỗi: ' + data.message);
+            }
+        } catch (error) {
+            console.error('Error registering pet:', error);
+            alert('Lỗi khi đăng ký thú cưng');
+        }
+    };
+
     const handleLogout = () => {
         logout();
         navigate('/');
@@ -389,6 +468,14 @@ const StaffDashboard = () => {
                 >
                     📅 Tạo lịch hẹn
                 </button>
+                {user?.ChucVu !== 'Bác sĩ thú y' && (
+                    <button 
+                        onClick={handleOpenPetModal} 
+                        style={{...buttonStyle, backgroundColor: '#9b59b6'}}
+                    >
+                        🐾 Đăng ký thú cưng
+                    </button>
+                )}
             </div>
 
             {activeTab === 'pending' && (
@@ -462,6 +549,155 @@ const StaffDashboard = () => {
                 tdStyle={tdStyle}
                 buttonStyle={buttonStyle}
             />
+
+            {/* Pet Registration Modal */}
+            {showPetModal && (
+                <div style={modalOverlayStyle} onClick={() => setShowPetModal(false)}>
+                    <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
+                        <h2 style={{ marginTop: 0, color: '#9b59b6' }}>🐾 Đăng ký thú cưng cho khách hàng</h2>
+                        
+                        {/* Customer Search Section */}
+                        <div style={{ marginBottom: '20px', padding: '15px', backgroundColor: '#f8f9fa', borderRadius: '8px' }}>
+                            <h3 style={{ marginTop: 0 }}>Tìm khách hàng</h3>
+                            <div style={{ display: 'flex', gap: '10px', marginBottom: '10px' }}>
+                                <input 
+                                    style={inputStyle}
+                                    placeholder="Tên khách hàng"
+                                    value={customerName}
+                                    onChange={(e) => setCustomerName(e.target.value)}
+                                />
+                                <input 
+                                    style={inputStyle}
+                                    placeholder="Số điện thoại"
+                                    value={customerPhone}
+                                    onChange={(e) => setCustomerPhone(e.target.value)}
+                                />
+                                <button 
+                                    onClick={handleFindCustomer}
+                                    style={{...buttonStyle, backgroundColor: '#3498db'}}
+                                >
+                                    Tìm
+                                </button>
+                            </div>
+                            
+                            {customer && (
+                                <div style={{ marginTop: '10px', padding: '10px', backgroundColor: '#d4edda', borderRadius: '4px', color: '#155724' }}>
+                                    ✓ Đã tìm thấy: {customer.HoTen} - {customer.SoDienThoai}
+                                </div>
+                            )}
+                        </div>
+                        
+                        {/* Pet Information Form */}
+                        <div style={{ marginBottom: '20px' }}>
+                            <h3>Thông tin thú cưng</h3>
+                            <div style={{ display: 'grid', gap: '15px' }}>
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+                                        Tên thú cưng <span style={{ color: 'red' }}>*</span>
+                                    </label>
+                                    <input 
+                                        style={inputStyle}
+                                        placeholder="Tên thú cưng"
+                                        value={newPet.TenThuCung}
+                                        onChange={(e) => setNewPet({...newPet, TenThuCung: e.target.value})}
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+                                        Loại thú cưng <span style={{ color: 'red' }}>*</span>
+                                    </label>
+                                    <select 
+                                        style={inputStyle}
+                                        value={newPet.MaLoaiTC}
+                                        onChange={(e) => setNewPet({...newPet, MaLoaiTC: e.target.value})}
+                                    >
+                                        <option value="">Chọn loại thú cưng</option>
+                                        {petTypes.map(type => (
+                                            <option key={type.MaLoaiTC} value={type.MaLoaiTC}>
+                                                {type.TenLoai}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Giống</label>
+                                    <input 
+                                        style={inputStyle}
+                                        placeholder="Giống"
+                                        value={newPet.Giong}
+                                        onChange={(e) => setNewPet({...newPet, Giong: e.target.value})}
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Ngày sinh</label>
+                                    <input 
+                                        style={inputStyle}
+                                        type="date"
+                                        value={newPet.NgaySinh}
+                                        onChange={(e) => setNewPet({...newPet, NgaySinh: e.target.value})}
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>
+                                        Giới tính <span style={{ color: 'red' }}>*</span>
+                                    </label>
+                                    <select 
+                                        style={inputStyle}
+                                        value={newPet.GioiTinh}
+                                        onChange={(e) => setNewPet({...newPet, GioiTinh: e.target.value})}
+                                    >
+                                        <option value="Đực">Đực</option>
+                                        <option value="Cái">Cái</option>
+                                    </select>
+                                </div>
+                                
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Cân nặng (kg)</label>
+                                    <input 
+                                        style={inputStyle}
+                                        type="number"
+                                        step="0.1"
+                                        placeholder="Cân nặng"
+                                        value={newPet.CanNang}
+                                        onChange={(e) => setNewPet({...newPet, CanNang: e.target.value})}
+                                    />
+                                </div>
+                                
+                                <div>
+                                    <label style={{ display: 'block', marginBottom: '5px', fontWeight: 'bold' }}>Tình trạng sức khỏe</label>
+                                    <textarea 
+                                        style={{...inputStyle, minHeight: '80px', resize: 'vertical'}}
+                                        placeholder="Tình trạng sức khỏe"
+                                        value={newPet.TinhTrangSK}
+                                        onChange={(e) => setNewPet({...newPet, TinhTrangSK: e.target.value})}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                        
+                        {/* Action Buttons */}
+                        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                            <button 
+                                onClick={() => setShowPetModal(false)}
+                                style={{...buttonStyle, backgroundColor: '#95a5a6'}}
+                            >
+                                Hủy
+                            </button>
+                            <button 
+                                onClick={handleRegisterPet}
+                                style={{...buttonStyle, backgroundColor: '#27ae60'}}
+                                disabled={!customer}
+                            >
+                                Đăng ký
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

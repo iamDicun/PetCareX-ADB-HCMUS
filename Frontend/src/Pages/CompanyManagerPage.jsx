@@ -30,6 +30,10 @@ const CompanyManagerPage = () => {
     const [selectedMonths, setSelectedMonths] = useState(3);
     const [selectedBranch, setSelectedBranch] = useState('');
     const [topN, setTopN] = useState(10);
+    const [fromDate, setFromDate] = useState('');
+    const [toDate, setToDate] = useState('');
+    const [fromDateProducts, setFromDateProducts] = useState('');
+    const [toDateProducts, setToDateProducts] = useState('');
 
     useEffect(() => {
         if (!user) {
@@ -61,25 +65,27 @@ const CompanyManagerPage = () => {
             const res = await fetch('http://localhost:5000/api/company-manager/branches');
             const data = await res.json();
             if (data.success) {
-                setBranches(data.branches || []);
+                setBranches(data.data);
             }
         } catch (error) {
             console.error('Error fetching branches:', error);
-            setBranches([]);
         }
     };
 
     const fetchHotServices = async () => {
         setLoading(true);
         try {
-            const res = await fetch(`http://localhost:5000/api/company-manager/hot-services?top=${topN}`);
+            let url = `http://localhost:5000/api/company-manager/hot-services?top=${topN}`;
+            if (fromDate) url += `&fromDate=${fromDate}`;
+            if (toDate) url += `&toDate=${toDate}`;
+            
+            const res = await fetch(url);
             const data = await res.json();
             if (data.success) {
-                setHotServices(data.data || []);
+                setHotServices(data.data);
             }
         } catch (error) {
             console.error('Error fetching hot services:', error);
-            setHotServices([]);
         } finally {
             setLoading(false);
         }
@@ -91,11 +97,10 @@ const CompanyManagerPage = () => {
             const res = await fetch(`http://localhost:5000/api/company-manager/system-revenue?year=${selectedYear}`);
             const data = await res.json();
             if (data.success) {
-                setSystemRevenue(data.data || []);
+                setSystemRevenue(data.data);
             }
         } catch (error) {
             console.error('Error fetching system revenue:', error);
-            setSystemRevenue([]);
         } finally {
             setLoading(false);
         }
@@ -107,11 +112,10 @@ const CompanyManagerPage = () => {
             const res = await fetch(`http://localhost:5000/api/company-manager/top-revenue-services?months=${selectedMonths}`);
             const data = await res.json();
             if (data.success) {
-                setTopRevenueServices(data.data || []);
+                setTopRevenueServices(data.data);
             }
         } catch (error) {
             console.error('Error fetching top revenue services:', error);
-            setTopRevenueServices([]);
         } finally {
             setLoading(false);
         }
@@ -120,15 +124,18 @@ const CompanyManagerPage = () => {
     const fetchBestSellingProducts = async () => {
         setLoading(true);
         try {
-            const branchParam = selectedBranch ? `&branchId=${selectedBranch}` : '';
-            const res = await fetch(`http://localhost:5000/api/company-manager/best-selling-products?top=${topN}${branchParam}`);
+            let url = `http://localhost:5000/api/company-manager/best-selling-products?top=${topN}`;
+            if (selectedBranch) url += `&branchId=${selectedBranch}`;
+            if (fromDateProducts) url += `&fromDate=${fromDateProducts}`;
+            if (toDateProducts) url += `&toDate=${toDateProducts}`;
+            
+            const res = await fetch(url);
             const data = await res.json();
             if (data.success) {
-                setBestSellingProducts(data.data || []);
+                setBestSellingProducts(data.data);
             }
         } catch (error) {
             console.error('Error fetching best selling products:', error);
-            setBestSellingProducts([]);
         } finally {
             setLoading(false);
         }
@@ -141,11 +148,10 @@ const CompanyManagerPage = () => {
             const res = await fetch(`http://localhost:5000/api/company-manager/employee-ratings${branchParam}`);
             const data = await res.json();
             if (data.success) {
-                setEmployeeRatings(data.data || []);
+                setEmployeeRatings(data.data);
             }
         } catch (error) {
             console.error('Error fetching employee ratings:', error);
-            setEmployeeRatings([]);
         } finally {
             setLoading(false);
         }
@@ -201,31 +207,6 @@ const CompanyManagerPage = () => {
             }
         } catch (error) {
             console.error('Error approving request:', error);
-            alert('Có lỗi xảy ra');
-        }
-    };
-
-    const handleCompleteRequest = async (requestId) => {
-        if (!window.confirm('Bạn có chắc chắn đã giao hàng xong và muốn hoàn tất yêu cầu này?')) {
-            return;
-        }
-
-        try {
-            const res = await fetch(`http://localhost:5000/api/company-manager/import-requests/${requestId}/complete`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            });
-            const data = await res.json();
-            if (data.success) {
-                alert(data.message);
-                fetchImportRequests();
-                setSelectedRequest(null);
-                setRequestDetails([]);
-            } else {
-                alert('Lỗi: ' + data.message);
-            }
-        } catch (error) {
-            console.error('Error completing request:', error);
             alert('Có lỗi xảy ra');
         }
     };
@@ -423,6 +404,24 @@ const CompanyManagerPage = () => {
                                 <h2 style={{ color: '#8e44ad', marginBottom: '20px' }}>📊 Thống kê Dịch vụ Hot</h2>
                                 <div style={filterContainerStyle}>
                                     <label>
+                                        Từ ngày:
+                                        <input 
+                                            type="date" 
+                                            value={fromDate} 
+                                            onChange={(e) => setFromDate(e.target.value)}
+                                            style={{...inputStyle, marginLeft: '10px'}}
+                                        />
+                                    </label>
+                                    <label>
+                                        Đến ngày:
+                                        <input 
+                                            type="date" 
+                                            value={toDate} 
+                                            onChange={(e) => setToDate(e.target.value)}
+                                            style={{...inputStyle, marginLeft: '10px'}}
+                                        />
+                                    </label>
+                                    <label>
                                         Top:
                                         <input 
                                             type="number" 
@@ -433,7 +432,7 @@ const CompanyManagerPage = () => {
                                         />
                                     </label>
                                     <button onClick={fetchHotServices} style={filterButtonStyle}>
-                                        Làm mới
+                                        Xem báo cáo
                                     </button>
                                 </div>
                                 {hotServices.length === 0 ? (
@@ -565,7 +564,7 @@ const CompanyManagerPage = () => {
                                             style={{...inputStyle, marginLeft: '10px'}}
                                         >
                                             <option value="">Tất cả chi nhánh</option>
-                                            {branches.map(branch => (
+                                            {branches?.map(branch => (
                                                 <option key={branch.MaChiNhanh} value={branch.MaChiNhanh}>
                                                     {branch.TenChiNhanh}
                                                 </option>
@@ -617,6 +616,24 @@ const CompanyManagerPage = () => {
                                 <h2 style={{ color: '#8e44ad', marginBottom: '20px' }}>🛍️ Sản phẩm Bán chạy</h2>
                                 <div style={filterContainerStyle}>
                                     <label>
+                                        Từ ngày:
+                                        <input 
+                                            type="date" 
+                                            value={fromDateProducts} 
+                                            onChange={(e) => setFromDateProducts(e.target.value)}
+                                            style={{...inputStyle, marginLeft: '10px'}}
+                                        />
+                                    </label>
+                                    <label>
+                                        Đến ngày:
+                                        <input 
+                                            type="date" 
+                                            value={toDateProducts} 
+                                            onChange={(e) => setToDateProducts(e.target.value)}
+                                            style={{...inputStyle, marginLeft: '10px'}}
+                                        />
+                                    </label>
+                                    <label>
                                         Chi nhánh:
                                         <select 
                                             value={selectedBranch} 
@@ -624,7 +641,7 @@ const CompanyManagerPage = () => {
                                             style={{...inputStyle, marginLeft: '10px'}}
                                         >
                                             <option value="">Tất cả chi nhánh</option>
-                                            {branches.map(branch => (
+                                            {branches?.map(branch => (
                                                 <option key={branch.MaChiNhanh} value={branch.MaChiNhanh}>
                                                     {branch.TenChiNhanh}
                                                 </option>
@@ -706,8 +723,7 @@ const CompanyManagerPage = () => {
                                                         <td style={tdStyle}>{request.TongSoLuong}</td>
                                                         <td style={tdStyle}>
                                                             <span style={{
-                                                                color: request.TrangThai === 'Mới' ? '#e74c3c' : 
-                                                                       request.TrangThai === 'Đã duyệt' ? '#f39c12' : '#3498db',
+                                                                color: request.TrangThai === 'Mới' ? '#e74c3c' : '#3498db',
                                                                 fontWeight: 'bold'
                                                             }}>
                                                                 {request.TrangThai}
@@ -735,14 +751,6 @@ const CompanyManagerPage = () => {
                                                                         Từ chối
                                                                     </button>
                                                                 </>
-                                                            )}
-                                                            {request.TrangThai === 'Đã duyệt' && (
-                                                                <button 
-                                                                    onClick={() => handleCompleteRequest(request.MaYeuCau)}
-                                                                    style={{...filterButtonStyle, backgroundColor: '#9b59b6'}}
-                                                                >
-                                                                    Hoàn tất
-                                                                </button>
                                                             )}
                                                         </td>
                                                     </tr>
@@ -917,7 +925,7 @@ const CompanyManagerPage = () => {
                                                 style={{...inputStyle, width: '100%'}}
                                             >
                                                 <option value="">-- Chọn chi nhánh --</option>
-                                                {branches.map(branch => (
+                                                {branches?.map(branch => (
                                                     <option key={branch.MaChiNhanh} value={branch.MaChiNhanh}>
                                                         {branch.TenChiNhanh} - {branch.DiaChi}
                                                     </option>

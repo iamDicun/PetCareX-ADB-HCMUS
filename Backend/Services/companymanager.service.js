@@ -174,46 +174,6 @@ const companyManagerService = {
         }
     },
 
-    // Complete import request - đánh dấu đã giao hàng
-    completeImportRequest: async (requestId) => {
-        try {
-            const pool = await poolPromise;
-            
-            // Kiểm tra xem yêu cầu có ở trạng thái "Đã duyệt" không
-            const checkResult = await pool.request()
-                .input('MaYeuCau', sql.UniqueIdentifier, requestId)
-                .query(`
-                    SELECT TrangThai 
-                    FROM YeuCauNhapHang 
-                    WHERE MaYeuCau = @MaYeuCau
-                `);
-            
-            if (checkResult.recordset.length === 0) {
-                return { success: false, message: 'Không tìm thấy yêu cầu' };
-            }
-            
-            const currentStatus = checkResult.recordset[0].TrangThai;
-            if (currentStatus !== 'Đã duyệt') {
-                return { success: false, message: `Yêu cầu phải ở trạng thái "Đã duyệt" để hoàn tất. Trạng thái hiện tại: ${currentStatus}` };
-            }
-            
-            // Cập nhật trạng thái sang "Hoàn tất"
-            await pool.request()
-                .input('MaYeuCau', sql.UniqueIdentifier, requestId)
-                .input('TrangThai', sql.NVarChar, 'Hoàn tất')
-                .query(`
-                    UPDATE YeuCauNhapHang 
-                    SET TrangThai = @TrangThai 
-                    WHERE MaYeuCau = @MaYeuCau
-                `);
-            
-            return { success: true, message: 'Hoàn tất giao hàng thành công' };
-        } catch (error) {
-            console.error('Error in completeImportRequest:', error);
-            return { success: false, message: error.message };
-        }
-    },
-
     // Get all employees for transfer
     getAllEmployees: async () => {
         try {

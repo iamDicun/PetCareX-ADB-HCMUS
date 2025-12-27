@@ -344,34 +344,29 @@ async function getCustomerPets(customerId) {
     }
 }
 
-async function getUpcomingVaccinations(customerId) {
+async function getUpcomingVaccinations(petId = null, dateLimit = null) {
     try {
         const pool = await poolPromise;
         const result = await pool.request()
-            .input('MaKhachHang', sql.UniqueIdentifier, customerId)
-            .query(`
-                SELECT 
-                    LST.MaLichSuTiem,
-                    LST.NgayTiem,
-                    LST.NgayTaiChung,
-                    LST.SoLoVacXin,
-                    TC.TenThuCung,
-                    TC.MaThuCung,
-                    DV.TenDichVu,
-                    NV.HoTen as BacSi,
-                    DATEDIFF(DAY, GETDATE(), LST.NgayTaiChung) as SoNgayConLai
-                FROM LichSuTiem LST
-                INNER JOIN ThuCung TC ON LST.MaThuCung = TC.MaThuCung
-                LEFT JOIN DichVu DV ON LST.MaDichVu = DV.MaDichVu
-                LEFT JOIN NhanVien NV ON LST.MaBacSi = NV.MaNhanVien
-                WHERE TC.MaKhachHang = @MaKhachHang
-                AND LST.NgayTaiChung IS NOT NULL
-                AND LST.NgayTaiChung >= GETDATE()
-                ORDER BY LST.NgayTaiChung ASC
-            `);
+            .input('MaThuCung', sql.UniqueIdentifier, petId)
+            .input('NgayGioiHan', sql.Date, dateLimit)
+            .execute('SP_DanhSachTiemDinhKy');
         return result.recordset;
     } catch (error) {
         console.error('[getUpcomingVaccinations] Error:', error.message, error);
+        throw error;
+    }
+}
+
+async function getPetMedicalHistory(petId) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('MaThuCung', sql.UniqueIdentifier, petId)
+            .execute('SP_TraCuuLichSuKham');
+        return result.recordset;
+    } catch (error) {
+        console.error('[getPetMedicalHistory] Error:', error.message, error);
         throw error;
     }
 }
@@ -599,6 +594,7 @@ export default {
     getSuitableProducts,
     getConfirmedInvoices,
     getUpcomingVaccinations,
+    getPetMedicalHistory,
     getAppointmentDetails,
     getOrderDetails,
     submitRating

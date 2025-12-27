@@ -216,6 +216,16 @@ const cusController = {
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
         }
+    },
+
+    getPetMedicalHistory: async (req, res) => {
+        try {
+            const { petId } = req.params;
+            const history = await CusService.getPetMedicalHistory(petId);
+            res.json({ success: true, data: history });
+        } catch (error) {
+            res.status(500).json({ success: false, message: error.message });
+        }
     }
 
 };

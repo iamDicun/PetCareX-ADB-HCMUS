@@ -24,6 +24,8 @@ const CustomerPage = () => {
     const [showRatingModal, setShowRatingModal] = useState(false);
     const [selectedInvoice, setSelectedInvoice] = useState(null);
     const [rating, setRating] = useState({ diemChatLuong: 5, diemThaiDo: 5, binhLuan: '' });
+    const [selectedPetForHistory, setSelectedPetForHistory] = useState(null);
+    const [medicalHistory, setMedicalHistory] = useState([]);
 
     // Forms state (removed newPet - no longer allowing pet registration)
     const [booking, setBooking] = useState({
@@ -205,6 +207,19 @@ const CustomerPage = () => {
         } catch (error) {
             console.error('Error submitting rating:', error);
             alert('Lỗi khi gửi đánh giá');
+        }
+    };
+
+    const fetchMedicalHistory = async (petId) => {
+        try {
+            const res = await fetch(`http://localhost:5000/api/customer/pet/${petId}/medical-history`);
+            const data = await res.json();
+            if (data.success) {
+                setMedicalHistory(data.data);
+                setSelectedPetForHistory(petId);
+            }
+        } catch (error) {
+            console.error('Error fetching medical history:', error);
         }
     };
 
@@ -411,9 +426,54 @@ const CustomerPage = () => {
                                 >
                                     Xem sản phẩm phù hợp
                                 </button>
+                                <button 
+                                    onClick={() => fetchMedicalHistory(p.MaThuCung)} 
+                                    style={{...buttonStyle, backgroundColor: '#3498db', marginTop: '10px', marginLeft: '10px'}}
+                                >
+                                    Lịch sử khám
+                                </button>
                             </div>
                         ))}
                     </div>
+                    
+                    {selectedPetForHistory && (
+                        <div style={{marginTop: '30px', padding: '20px', backgroundColor: '#f0f8ff', borderRadius: '8px'}}>
+                            <h3>Lịch sử khám bệnh - {pets.find(p => p.MaThuCung === selectedPetForHistory)?.TenThuCung}</h3>
+                            {medicalHistory.length === 0 ? (
+                                <p style={{textAlign: 'center', padding: '20px', color: '#7f8c8d', fontSize: '16px'}}>
+                                    Chưa có lịch sử khám bệnh
+                                </p>
+                            ) : (
+                                <div style={{maxHeight: '400px', overflowY: 'auto'}}>
+                                    {medicalHistory.map((record, idx) => (
+                                        <div key={idx} style={{
+                                            padding: '15px',
+                                            marginBottom: '10px',
+                                            backgroundColor: 'white',
+                                            borderRadius: '5px',
+                                            border: '1px solid #e0e0e0'
+                                        }}>
+                                            <p><strong>Ngày khám:</strong> {new Date(record.NgayGioHen).toLocaleDateString('vi-VN')}</p>
+                                            <p><strong>Dịch vụ:</strong> {record.TenDichVu}</p>
+                                            <p><strong>Bác sĩ:</strong> {record.BacSiThucHien || 'N/A'}</p>
+                                            {record.TrieuChung && <p><strong>Triệu chứng:</strong> {record.TrieuChung}</p>}
+                                            {record.ChuanDoan && <p><strong>Chẩn đoán:</strong> {record.ChuanDoan}</p>}
+                                            {record.KetQua && <p><strong>Kết quả:</strong> {record.KetQua}</p>}
+                                            {record.NgayTaiKham && (
+                                                <p><strong>Ngày tái khám:</strong> {new Date(record.NgayTaiKham).toLocaleDateString('vi-VN')}</p>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            <button 
+                                onClick={() => {setSelectedPetForHistory(null); setMedicalHistory([]);}} 
+                                style={{...buttonStyle, backgroundColor: '#95a5a6', marginTop: '10px'}}
+                            >
+                                Đóng
+                            </button>
+                        </div>
+                    )}
                     
                     {selectedPet && suitableProducts.length > 0 && (
                         <div style={{marginTop: '30px', padding: '20px', backgroundColor: '#f9f9f9', borderRadius: '8px'}}>

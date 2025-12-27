@@ -177,24 +177,6 @@ const companyManagerController = {
         }
     },
 
-    // POST /api/company-manager/import-requests/:requestId/complete
-    completeImportRequest: async (req, res) => {
-        try {
-            const { requestId } = req.params;
-            
-            const result = await companyManagerService.completeImportRequest(requestId);
-            
-            if (result.success) {
-                res.json(result);
-            } else {
-                res.status(500).json(result);
-            }
-        } catch (error) {
-            console.error('Error in completeImportRequest controller:', error);
-            res.status(500).json({ success: false, message: error.message });
-        }
-    },
-
     // GET /api/company-manager/employees
     getAllEmployees: async (req, res) => {
         try {

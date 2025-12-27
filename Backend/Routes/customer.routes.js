@@ -20,5 +20,6 @@ cusRouter.get('/vaccinations/upcoming/:id', cusController.getUpcomingVaccination
 cusRouter.get('/appointment/:appointmentId/details', cusController.getAppointmentDetails);
 cusRouter.get('/order/:orderId/details', cusController.getOrderDetails);
 cusRouter.post('/rating', cusController.submitRating);
+cusRouter.get('/pet/:petId/medical-history', cusController.getPetMedicalHistory);
 
 export default cusRouter;

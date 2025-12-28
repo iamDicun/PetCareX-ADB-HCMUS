@@ -43,42 +43,45 @@ GO
 
 
 
-CREATE OR ALTER TRIGGER TR_HoaDon_AfterUpdate_XetHang
-ON HoaDon
+-- Trigger cập nhật chi tiêu khi LỊCH HẸN hoàn tất
+CREATE OR ALTER TRIGGER TR_LichHen_AfterUpdate_ChiTieu
+ON LichHen
 AFTER UPDATE
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- 1. Chỉ chạy khi cột 'TongThucTra' có thay đổi
-    IF NOT UPDATE(TongTienThucTra) RETURN;
+    -- Chỉ chạy khi TrangThai thay đổi sang "Hoàn tất"
+    IF NOT UPDATE(TrangThai) RETURN;
 
-    -- [SỬA LỖI Ở ĐÂY]: Đổi VARCHAR(20) thành UNIQUEIDENTIFIER
-    DECLARE @BienDongChiTieu TABLE (
+    DECLARE @ChiTieuMoi TABLE (
         MaKhachHang UNIQUEIDENTIFIER, 
-        TienChenhLech DECIMAL(18, 0)
+        TienChiTieu DECIMAL(18, 0)
     );
 
-    -- 2. Tính toán tiền chênh lệch
-    INSERT INTO @BienDongChiTieu (MaKhachHang, TienChenhLech)
+    -- Lấy số tiền từ hóa đơn của lịch hẹn vừa hoàn tất
+    INSERT INTO @ChiTieuMoi (MaKhachHang, TienChiTieu)
     SELECT 
-        i.MaKhachHang, 
-        (ISNULL(i.TongTienThucTra, 0) - ISNULL(d.TongTienThucTra, 0))
+        HD.MaKhachHang, 
+        ISNULL(HD.TongTienThucTra, 0)
     FROM INSERTED i
-    JOIN DELETED d ON i.MaHoaDon = d.MaHoaDon
-    WHERE ISNULL(i.TongTienThucTra, 0) <> ISNULL(d.TongTienThucTra, 0)
-      AND i.MaKhachHang IS NOT NULL;
+    JOIN DELETED d ON i.MaLichHen = d.MaLichHen
+    JOIN HoaDon HD ON i.MaHoaDon = HD.MaHoaDon
+    WHERE i.TrangThai = N'Hoàn tất' 
+      AND d.TrangThai <> N'Hoàn tất'
+      AND i.MaHoaDon IS NOT NULL
+      AND HD.MaKhachHang IS NOT NULL;
 
-    -- Nếu không có biến động thì dừng
-    IF NOT EXISTS (SELECT 1 FROM @BienDongChiTieu) RETURN;
+    -- Nếu không có gì thì thoát
+    IF NOT EXISTS (SELECT 1 FROM @ChiTieuMoi) RETURN;
 
-    -- 3. CẬP NHẬT TỔNG CHI TIÊU VÀO THẺ
+    -- Cập nhật chi tiêu vào thẻ
     UPDATE T
-    SET T.TongChiTieuNam = T.TongChiTieuNam + BD.TienChenhLech
+    SET T.TongChiTieuNam = T.TongChiTieuNam + CT.TienChiTieu
     FROM TheThanhVien T
-    JOIN @BienDongChiTieu BD ON T.MaKhachHang = BD.MaKhachHang;
+    JOIN @ChiTieuMoi CT ON T.MaKhachHang = CT.MaKhachHang;
 
-    -- 4. XÉT NÂNG HẠNG TỰ ĐỘNG
+    -- Xét nâng hạng tự động
     UPDATE T
     SET HangThanhVien = CASE 
         WHEN T.TongChiTieuNam >= 12000000 THEN N'VIP'
@@ -86,11 +89,57 @@ BEGIN
         ELSE N'Cơ bản'
     END
     FROM TheThanhVien T
-    JOIN @BienDongChiTieu BD ON T.MaKhachHang = BD.MaKhachHang
-    WHERE 
-        (T.TongChiTieuNam >= 12000000 AND T.HangThanhVien <> N'VIP')
-        OR 
-        (T.TongChiTieuNam >= 5000000 AND T.TongChiTieuNam < 12000000 AND T.HangThanhVien <> N'Thân thiết');
+    JOIN @ChiTieuMoi CT ON T.MaKhachHang = CT.MaKhachHang;
+END;
+GO
+
+-- Trigger cập nhật chi tiêu khi ĐƠN HÀNG hoàn tất
+CREATE OR ALTER TRIGGER TR_DonHang_AfterUpdate_ChiTieu
+ON DonHang
+AFTER UPDATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Chỉ chạy khi TrangThai thay đổi sang "Hoàn tất"
+    IF NOT UPDATE(TrangThai) RETURN;
+
+    DECLARE @ChiTieuMoi TABLE (
+        MaKhachHang UNIQUEIDENTIFIER, 
+        TienChiTieu DECIMAL(18, 0)
+    );
+
+    -- Lấy số tiền từ hóa đơn của đơn hàng vừa hoàn tất
+    INSERT INTO @ChiTieuMoi (MaKhachHang, TienChiTieu)
+    SELECT 
+        HD.MaKhachHang, 
+        ISNULL(HD.TongTienThucTra, 0)
+    FROM INSERTED i
+    JOIN DELETED d ON i.MaDonHang = d.MaDonHang
+    JOIN HoaDon HD ON i.MaHoaDon = HD.MaHoaDon
+    WHERE i.TrangThai = N'Hoàn tất' 
+      AND d.TrangThai <> N'Hoàn tất'
+      AND i.MaHoaDon IS NOT NULL
+      AND HD.MaKhachHang IS NOT NULL;
+
+    -- Nếu không có gì thì thoát
+    IF NOT EXISTS (SELECT 1 FROM @ChiTieuMoi) RETURN;
+
+    -- Cập nhật chi tiêu vào thẻ
+    UPDATE T
+    SET T.TongChiTieuNam = T.TongChiTieuNam + CT.TienChiTieu
+    FROM TheThanhVien T
+    JOIN @ChiTieuMoi CT ON T.MaKhachHang = CT.MaKhachHang;
+
+    -- Xét nâng hạng tự động
+    UPDATE T
+    SET HangThanhVien = CASE 
+        WHEN T.TongChiTieuNam >= 12000000 THEN N'VIP'
+        WHEN T.TongChiTieuNam >= 5000000 THEN N'Thân thiết'
+        ELSE N'Cơ bản'
+    END
+    FROM TheThanhVien T
+    JOIN @ChiTieuMoi CT ON T.MaKhachHang = CT.MaKhachHang;
 END;
 GO
 CREATE OR ALTER TRIGGER TR_GhiLichSuDieuDong
@@ -801,6 +850,31 @@ BEGIN
 END;
 GO
 
+-- SP: Thống kê doanh thu thuốc theo chi nhánh
+CREATE OR ALTER PROCEDURE SP_ThongKe_DoanhThu_Thuoc
+    @MaChiNhanh UNIQUEIDENTIFIER,
+    @TuNgay DATE,
+    @DenNgay DATE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    SELECT 
+        SP.TenSanPham AS TenThuoc,
+        SUM(TT.SoLuong) AS TongSoLuong,
+        SUM(TT.SoLuong * SP.GiaBan) AS DoanhThu
+    FROM LichHen LH
+    JOIN HoSoKham HSK ON LH.MaLichHen = HSK.MaLichHen
+    JOIN ToaThuoc TT ON HSK.MaHoSo = TT.MaHoSo
+    JOIN SanPham SP ON TT.MaSanPham = SP.MaSanPham
+    WHERE LH.MaChiNhanh = @MaChiNhanh
+      AND LH.TrangThai = N'Hoàn tất'
+      AND CAST(LH.NgayGioHen AS DATE) BETWEEN @TuNgay AND @DenNgay
+    GROUP BY SP.MaSanPham, SP.TenSanPham
+    ORDER BY DoanhThu DESC;
+END;
+GO
+
 --trigerr g
 USE PetCareX_test_TR;
 GO
@@ -914,6 +988,62 @@ BEGIN
         RAISERROR(@Err, 16, 1);
         ROLLBACK TRANSACTION;
     END CATCH
+END;
+GO
+
+
+-- =============================================================
+-- STORED PROCEDURE: Thống kê dịch vụ hot (được đặt nhiều nhất)
+-- =============================================================
+GO
+
+CREATE OR ALTER PROCEDURE SP_ThongKe_DichVu_Hot_ChiNhanh
+    @MaChiNhanh UNIQUEIDENTIFIER,
+    @TuNgay DATE = NULL,
+    @DenNgay DATE = NULL
+AS
+BEGIN
+    SET NOCOUNT ON;
+    
+    -- Thiết lập mặc định nếu không có ngày
+    IF @TuNgay IS NULL SET @TuNgay = DATEADD(MONTH, -3, GETDATE());
+    IF @DenNgay IS NULL SET @DenNgay = GETDATE();
+    
+    -- Truy vấn toàn bộ dữ liệu, không giới hạn TOP
+    SELECT 
+        DV.MaDichVu,
+        DV.TenDichVu,
+        DV.LoaiDichVu,
+        DV.GiaNiemYet,
+        DV.MoTa,
+        DV.ThoiGianThucHienDuKien,
+        COUNT(DISTINCT CTLH.MaLichHen) AS SoLuotDat,
+        COUNT(CTLH.MaDichVu) AS TongSoLanDichVu,
+        SUM(CTLH.DonGiaThucTe) AS TongDoanhThu,
+        AVG(CTLH.DonGiaThucTe) AS GiaTrungBinh,
+        MIN(LH.NgayGioHen) AS NgayDatDauTien,
+        MAX(LH.NgayGioHen) AS NgayDatGanNhat,
+        COUNT(DISTINCT LH.MaKhachHang) AS SoKhachHangSuDung
+    FROM DichVu DV
+    LEFT JOIN ChiTietLichHen CTLH ON DV.MaDichVu = CTLH.MaDichVu
+    LEFT JOIN LichHen LH ON CTLH.MaLichHen = LH.MaLichHen 
+        AND LH.MaChiNhanh = @MaChiNhanh
+        AND LH.TrangThai != N'Hủy'
+        AND CAST(LH.NgayGioHen AS DATE) BETWEEN @TuNgay AND @DenNgay
+    WHERE EXISTS (
+        SELECT 1 FROM CauHinhDichVu CHDV 
+        WHERE CHDV.MaDichVu = DV.MaDichVu 
+        AND CHDV.MaChiNhanh = @MaChiNhanh 
+        AND CHDV.TrangThai = 1
+    )
+    GROUP BY 
+        DV.MaDichVu, 
+        DV.TenDichVu, 
+        DV.LoaiDichVu, 
+        DV.GiaNiemYet,
+        DV.MoTa,
+        DV.ThoiGianThucHienDuKien
+    ORDER BY SoLuotDat DESC, TongDoanhThu DESC;
 END;
 GO
 

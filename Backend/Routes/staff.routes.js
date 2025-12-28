@@ -20,5 +20,7 @@ staffRouter.get('/appointment/:appointmentId/details', staffController.getAppoin
 staffRouter.get('/customer/:customerId/pets', staffController.getCustomerPets);
 staffRouter.post('/order/:orderId/confirm', staffController.confirmOrder);
 staffRouter.post('/appointment/:appointmentId/confirm', staffController.confirmAppointment);
+staffRouter.get('/invoices/pending', staffController.getPendingInvoices);
+staffRouter.post('/invoice/:invoiceId/complete', staffController.completePayment);
 
 export default staffRouter;

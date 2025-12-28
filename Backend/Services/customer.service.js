@@ -104,26 +104,16 @@ async function createOrder(data) {
     try {
         await transaction.begin();
         
-        // Create Order
+        // Create Order without invoice (will be created when staff confirms)
         const request = new sql.Request(transaction);
-        await request
+        const orderResult = await request
             .input('MaKhachHang', sql.UniqueIdentifier, data.MaKhachHang)
             .input('MaChiNhanh', sql.UniqueIdentifier, data.MaChiNhanh)
             .input('LoaiDon', sql.NVarChar, 'Online')
             .query(`
                 INSERT INTO DonHang (MaKhachHang, MaChiNhanh, LoaiDon, TrangThai, NgayDat)
+                OUTPUT INSERTED.MaDonHang
                 VALUES (@MaKhachHang, @MaChiNhanh, @LoaiDon, N'Chờ xử lý', GETDATE())
-            `);
-            
-        // Get the inserted order ID
-        const orderIdRequest = new sql.Request(transaction);
-        const orderResult = await orderIdRequest
-            .input('MaKhachHang', sql.UniqueIdentifier, data.MaKhachHang)
-            .query(`
-                SELECT TOP 1 MaDonHang 
-                FROM DonHang 
-                WHERE MaKhachHang = @MaKhachHang 
-                ORDER BY NgayDat DESC
             `);
             
         const maDonHang = orderResult.recordset[0].MaDonHang;
@@ -167,7 +157,7 @@ async function createAppointment(data) {
         await transaction.begin();
         console.log('[createAppointment] Transaction started');
         
-        // Ensure date is in proper format
+        // Create appointment without invoice (will be created when staff confirms)
         const appointmentDate = new Date(data.NgayGioHen);
         console.log('[createAppointment] Parsed appointment date:', appointmentDate);
         

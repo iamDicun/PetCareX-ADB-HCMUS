@@ -5,6 +5,7 @@ import RevenueTab from '../Component/BranchManager/RevenueTab';
 import OrdersTab from '../Component/BranchManager/OrdersTab';
 import EmployeesTab from '../Component/BranchManager/EmployeesTab';
 import ProductsTab from '../Component/BranchManager/ProductsTab';
+import ServicesTab from '../Component/BranchManager/ServicesTab';
 import InventoryTab from '../Component/BranchManager/InventoryTab';
 import ImportHistoryTab from '../Component/BranchManager/ImportHistoryTab';
 import RequestImportModal from '../Component/BranchManager/RequestImportModal';
@@ -23,6 +24,7 @@ const BranchManagerPage = () => {
     });
     
     const [revenueData, setRevenueData] = useState([]);
+    const [medicineRevenue, setMedicineRevenue] = useState([]);
     const [ordersData, setOrdersData] = useState([]);
     const [ordersPagination, setOrdersPagination] = useState(null);
     const [currentOrderPage, setCurrentOrderPage] = useState(1);
@@ -33,6 +35,7 @@ const BranchManagerPage = () => {
     const [currentPerformancePage, setCurrentPerformancePage] = useState(1);
     
     const [topProducts, setTopProducts] = useState([]);
+    const [hotServices, setHotServices] = useState([]);
     const [inventory, setInventory] = useState([]);
     const [inventoryPagination, setInventoryPagination] = useState(null);
     const [currentInventoryPage, setCurrentInventoryPage] = useState(1);
@@ -55,6 +58,23 @@ const BranchManagerPage = () => {
         } catch (error) {
             console.error('Lỗi khi lấy doanh thu:', error);
             alert('Không thể lấy dữ liệu doanh thu');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleFetchMedicineRevenue = async () => {
+        try {
+            setLoading(true);
+            const data = await branchService.fetchMedicineRevenue(
+                user?.MaChiNhanh,
+                dateRange.tuNgay,
+                dateRange.denNgay
+            );
+            setMedicineRevenue(data);
+        } catch (error) {
+            console.error('Lỗi khi lấy doanh thu thuốc:', error);
+            alert('Không thể lấy dữ liệu doanh thu thuốc');
         } finally {
             setLoading(false);
         }
@@ -154,6 +174,29 @@ const BranchManagerPage = () => {
         }
     };
 
+    const handleFetchHotServices = async () => {
+        try {
+            setLoading(true);
+            console.log('Fetching hot services with params:', {
+                MaChiNhanh: user?.MaChiNhanh,
+                TuNgay: dateRange.tuNgay,
+                DenNgay: dateRange.denNgay
+            });
+            const data = await branchService.fetchHotServices(
+                user?.MaChiNhanh,
+                dateRange.tuNgay,
+                dateRange.denNgay
+            );
+            console.log('Hot services data received:', data);
+            setHotServices(data);
+        } catch (error) {
+            console.error('Lỗi khi lấy thống kê dịch vụ:', error);
+            alert('Không thể lấy thống kê dịch vụ');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const handleFetchInventory = async (page = 1) => {
         try {
             setLoading(true);
@@ -217,6 +260,9 @@ const BranchManagerPage = () => {
             case 'revenue':
                 handleFetchRevenue();
                 break;
+            case 'medicine':
+                handleFetchMedicineRevenue();
+                break;
             case 'orders':
                 handleFetchOrders();
                 break;
@@ -225,6 +271,9 @@ const BranchManagerPage = () => {
                 break;
             case 'products':
                 handleFetchTopProducts();
+                break;
+            case 'services':
+                handleFetchHotServices();
                 break;
             case 'inventory':
                 handleFetchInventory();
@@ -266,9 +315,11 @@ const BranchManagerPage = () => {
             <button onClick={() => {
                 switch (activeTab) {
                     case 'revenue': handleFetchRevenue(); break;
+                    case 'medicine': handleFetchMedicineRevenue(); break;
                     case 'orders': handleFetchOrders(1); break;
                     case 'employees': handleFetchEmployeesData(); break;
                     case 'products': handleFetchTopProducts(); break;
+                    case 'services': handleFetchHotServices(); break;
                 }
             }} style={styles.buttonStyle}>
                 Lọc
@@ -294,6 +345,36 @@ const BranchManagerPage = () => {
                         thStyle={styles.thStyle}
                         tdStyle={styles.tdStyle}
                     />
+                );
+
+            case 'medicine':
+                return (
+                    <div>
+                        <h2>Doanh thu Thuốc</h2>
+                        {renderDateFilter()}
+                        {medicineRevenue.length > 0 ? (
+                            <table style={styles.tableStyle}>
+                                <thead>
+                                    <tr>
+                                        <th style={styles.thStyle}>Tên thuốc</th>
+                                        <th style={styles.thStyle}>Số lượng</th>
+                                        <th style={styles.thStyle}>Doanh thu</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {medicineRevenue.map((row, index) => (
+                                        <tr key={index}>
+                                            <td style={styles.tdStyle}>{row.TenThuoc}</td>
+                                            <td style={styles.tdStyle}>{row.TongSoLuong}</td>
+                                            <td style={styles.tdStyle}><strong>{(row.DoanhThu || 0).toLocaleString('vi-VN')} VNĐ</strong></td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        ) : (
+                            <p>Không có dữ liệu doanh thu thuốc trong khoảng thời gian này.</p>
+                        )}
+                    </div>
                 );
 
             case 'orders':
@@ -330,6 +411,17 @@ const BranchManagerPage = () => {
                 return (
                     <ProductsTab
                         topProducts={topProducts}
+                        renderDateFilter={renderDateFilter}
+                        tableStyle={styles.tableStyle}
+                        thStyle={styles.thStyle}
+                        tdStyle={styles.tdStyle}
+                    />
+                );
+
+            case 'services':
+                return (
+                    <ServicesTab
+                        hotServices={hotServices}
                         renderDateFilter={renderDateFilter}
                         tableStyle={styles.tableStyle}
                         thStyle={styles.thStyle}
@@ -391,6 +483,12 @@ const BranchManagerPage = () => {
                     Doanh thu
                 </button>
                 <button
+                    style={styles.tabButtonStyle(activeTab === 'medicine')}
+                    onClick={() => setActiveTab('medicine')}
+                >
+                    Doanh thu Thuốc
+                </button>
+                <button
                     style={styles.tabButtonStyle(activeTab === 'orders')}
                     onClick={() => setActiveTab('orders')}
                 >
@@ -407,6 +505,12 @@ const BranchManagerPage = () => {
                     onClick={() => setActiveTab('products')}
                 >
                     Sản phẩm Hot
+                </button>
+                <button
+                    style={styles.tabButtonStyle(activeTab === 'services')}
+                    onClick={() => setActiveTab('services')}
+                >
+                    Dịch vụ
                 </button>
                 <button
                     style={styles.tabButtonStyle(activeTab === 'inventory')}

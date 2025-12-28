@@ -14,7 +14,23 @@ const getAuthHeaders = () => {
 
 // Lấy doanh thu
 export const fetchRevenue = async (MaChiNhanh, TuNgay, DenNgay) => {
+    console.log('=== fetchRevenue called ===');
+    console.log('MaChiNhanh:', MaChiNhanh);
+    console.log('TuNgay:', TuNgay);
+    console.log('DenNgay:', DenNgay);
+    
     const response = await axios.get(`${API_URL}/revenue`, {
+        ...getAuthHeaders(),
+        params: { MaChiNhanh, TuNgay, DenNgay }
+    });
+    
+    console.log('Response data count:', response.data.data?.length);
+    return response.data.data || [];
+};
+
+// Lấy doanh thu thuốc
+export const fetchMedicineRevenue = async (MaChiNhanh, TuNgay, DenNgay) => {
+    const response = await axios.get(`${API_URL}/medicine-revenue`, {
         ...getAuthHeaders(),
         params: { MaChiNhanh, TuNgay, DenNgay }
     });
@@ -51,6 +67,26 @@ export const fetchTopProducts = async (MaChiNhanh, TuNgay, DenNgay) => {
         ...getAuthHeaders(),
         params: { MaChiNhanh, TuNgay, DenNgay }
     });
+    return response.data.data || [];
+};
+
+// Lấy thống kê dịch vụ hot (được đặt nhiều nhất)
+export const fetchHotServices = async (MaChiNhanh, TuNgay, DenNgay) => {
+    console.log('fetchHotServices called with:', { MaChiNhanh, TuNgay, DenNgay });
+    
+    // Build params object, only include dates if they have values
+    const params = { MaChiNhanh };
+    if (TuNgay) params.TuNgay = TuNgay;
+    if (DenNgay) params.DenNgay = DenNgay;
+    
+    console.log('Sending request with params:', params);
+    
+    const response = await axios.get(`${API_URL}/hot-services`, {
+        ...getAuthHeaders(),
+        params
+    });
+    
+    console.log('Response received:', response.data);
     return response.data.data || [];
 };
 

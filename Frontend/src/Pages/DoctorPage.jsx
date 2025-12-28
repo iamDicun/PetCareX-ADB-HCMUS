@@ -15,6 +15,7 @@ const DoctorPage = () => {
     const [appointments, setAppointments] = useState([]);
     const [selectedAppointment, setSelectedAppointment] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [pagination, setPagination] = useState({ page: 1, limit: 10, total: 0, totalPages: 0 });
     
     // Medical Record State
     const [showMedicalRecordModal, setShowMedicalRecordModal] = useState(false);
@@ -56,18 +57,23 @@ const DoctorPage = () => {
         if (user?.MaNhanVien) {
             fetchAppointments();
         }
-    }, [user]);
+    }, [user, pagination.page]);
 
     const fetchAppointments = async () => {
         setLoading(true);
         try {
             const token = localStorage.getItem('token');
             const response = await axios.get(
-                `http://localhost:5000/api/vet/appointments/${user.MaNhanVien}`,
+                `http://localhost:5000/api/vet/appointments/${user.MaNhanVien}?page=${pagination.page}&limit=${pagination.limit}`,
                 { headers: { Authorization: `Bearer ${token}` } }
             );
             if (response.data.success) {
                 setAppointments(response.data.appointments);
+                setPagination(prev => ({
+                    ...prev,
+                    total: response.data.pagination.total,
+                    totalPages: response.data.pagination.totalPages
+                }));
             }
         } catch (error) {
             console.error('Error fetching appointments:', error);
@@ -454,15 +460,66 @@ const DoctorPage = () => {
                 ) : appointments.length === 0 ? (
                     <p style={{ textAlign: 'center', color: '#666' }}>Không có lịch hẹn nào</p>
                 ) : (
-                    <AppointmentTable 
-                        appointments={appointments}
-                        onCreateMedicalRecord={openMedicalRecordModal}
-                        onCreatePrescription={openPrescriptionModal}
-                        onEditResults={(appt) => {
-                            setSelectedAppointmentForResults(appt.MaLichHen);
-                            setShowResultsModal(true);
-                        }}
-                    />
+                    <>
+                        <AppointmentTable 
+                            appointments={appointments}
+                            onCreateMedicalRecord={openMedicalRecordModal}
+                            onCreatePrescription={openPrescriptionModal}
+                            onEditResults={(appt) => {
+                                setSelectedAppointmentForResults(appt.MaLichHen);
+                                setShowResultsModal(true);
+                            }}
+                        />
+                        
+                        {/* Pagination Controls */}
+                        {pagination.totalPages > 1 && (
+                            <div style={{ 
+                                display: 'flex', 
+                                justifyContent: 'center', 
+                                alignItems: 'center', 
+                                gap: '10px',
+                                marginTop: '20px',
+                                padding: '10px'
+                            }}>
+                                <button 
+                                    onClick={() => setPagination(prev => ({ ...prev, page: prev.page - 1 }))}
+                                    disabled={pagination.page === 1}
+                                    style={{
+                                        padding: '8px 16px',
+                                        border: '1px solid #ddd',
+                                        borderRadius: '4px',
+                                        backgroundColor: pagination.page === 1 ? '#f5f5f5' : '#fff',
+                                        cursor: pagination.page === 1 ? 'not-allowed' : 'pointer',
+                                        color: pagination.page === 1 ? '#999' : '#333'
+                                    }}
+                                >
+                                    ← Trước
+                                </button>
+                                
+                                <span style={{ color: '#666', fontSize: '14px' }}>
+                                    Trang {pagination.page} / {pagination.totalPages} 
+                                    <span style={{ marginLeft: '10px', color: '#999' }}>
+                                        ({pagination.total} lịch hẹn)
+                                    </span>
+                                </span>
+                                
+                                <button 
+                                    onClick={() => setPagination(prev => ({ ...prev, page: prev.page + 1 }))}
+                                    disabled={pagination.page === pagination.totalPages}
+                                    style={{
+                                        padding: '8px 16px',
+                                        border: '1px solid #ddd',
+                                        borderRadius: '4px',
+                                        backgroundColor: pagination.page === pagination.totalPages ? '#f5f5f5' : '#fff',
+                                        cursor: pagination.page === pagination.totalPages ? 'not-allowed' : 'pointer',
+                                        color: pagination.page === pagination.totalPages ? '#999' : '#333'
+                                    }}
+                                >
+                                    Sau →
+                                </button>
+                            </div>
+                        )}
+                    </>
                 )}
             </div>
 

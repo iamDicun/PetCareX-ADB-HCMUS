@@ -4,9 +4,16 @@ const vetController = {
     // Get appointments for a specific vet
     async getVetAppointments(req, res) {
         const { vetId } = req.params;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        
         try {
-            const appointments = await vetService.getVetAppointments(vetId);
-            res.json({ success: true, appointments });
+            const result = await vetService.getVetAppointments(vetId, page, limit);
+            res.json({ 
+                success: true, 
+                appointments: result.appointments,
+                pagination: result.pagination
+            });
         } catch (error) {
             console.error('[getVetAppointments] Error:', error.message, error);
             res.status(500).json({ success: false, message: 'Lỗi máy chủ' });

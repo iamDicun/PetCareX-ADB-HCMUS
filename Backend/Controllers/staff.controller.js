@@ -299,6 +299,47 @@ const staffController = {
         }
     },
 
+    // Get pending invoices for a customer
+    async getPendingInvoices(req, res) {
+        try {
+            const { customerId } = req.query;
+            
+            if (!customerId) {
+                return res.status(400).json({ 
+                    success: false, 
+                    message: 'Mã khách hàng là bắt buộc' 
+                });
+            }
+
+            const invoices = await staffService.getPendingInvoices(customerId);
+            res.json({ success: true, invoices });
+        } catch (error) {
+            console.error('[getPendingInvoices] Error:', error.message, error);
+            res.status(500).json({ success: false, message: 'Lỗi máy chủ' });
+        }
+    },
+
+    // Complete payment for an invoice
+    async completePayment(req, res) {
+        try {
+            const { invoiceId } = req.params;
+            const staffId = req.user?.id || req.user?.MaNhanVien;
+            
+            if (!invoiceId) {
+                return res.status(400).json({ 
+                    success: false, 
+                    message: 'Mã hóa đơn là bắt buộc' 
+                });
+            }
+
+            const result = await staffService.completePayment(invoiceId, staffId);
+            res.json({ success: true, message: result.message });
+        } catch (error) {
+            console.error('[completePayment] Error:', error.message, error);
+            res.status(500).json({ success: false, message: 'Lỗi máy chủ' });
+        }
+    },
+
 };
 
 export default staffController;

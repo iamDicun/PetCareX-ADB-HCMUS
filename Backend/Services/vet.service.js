@@ -3,9 +3,24 @@ import sql from 'mssql';
 
 const vetService = {
     // Get all appointments for a specific vet
-    async getVetAppointments(vetId) {
+    async getVetAppointments(vetId, page = 1, limit = 10) {
         try {
             const pool = await poolPromise;
+            const offset = (page - 1) * limit;
+
+            // Get total count
+            const countResult = await pool.request()
+                .input('vetId', sql.UniqueIdentifier, vetId)
+                .query(`
+                    SELECT COUNT(DISTINCT lh.MaLichHen) AS Total
+                    FROM LichHen lh
+                    JOIN ChiTietLichHen ctlh ON ctlh.MaLichHen = lh.MaLichHen
+                    WHERE ctlh.MaBacSi = @vetId
+                `);
+            
+            const total = countResult.recordset[0].Total;
+
+            // Get paginated results
             const result = await pool.request()
                 .input('vetId', sql.UniqueIdentifier, vetId)
                 .query(`
@@ -36,8 +51,19 @@ const vetService = {
                         kh.HoTen, kh.SoDienThoai,
                         tc.TenThuCung, ltc.TenLoai, tc.Giong, tc.CanNang
                     ORDER BY lh.NgayGioHen DESC
+                    OFFSET ${offset} ROWS
+                    FETCH NEXT ${limit} ROWS ONLY
                 `);
-            return result.recordset;
+            
+            return {
+                appointments: result.recordset,
+                pagination: {
+                    page,
+                    limit,
+                    total,
+                    totalPages: Math.ceil(total / limit)
+                }
+            };
         } catch (error) {
             console.error('[getVetAppointments] Error:', error.message, error);
             throw error;
@@ -191,8 +217,12 @@ const vetService = {
                 .input('medicalRecordId', sql.UniqueIdentifier, medicalRecordId)
                 .query(`
                     SELECT 
-                        tt.*,
+                        tt.MaHoSo,
+                        tt.MaSanPham,
+                        tt.SoLuong,
+                        tt.CachDung,
                         sp.TenSanPham,
+                        sp.GiaBan,
                         sp.MoTa
                     FROM ToaThuoc tt
                     JOIN SanPham sp ON sp.MaSanPham = tt.MaSanPham
@@ -246,27 +276,45 @@ const vetService = {
 
     // Create new appointment
     async createAppointment(data) {
+        const pool = await poolPromise;
+        const transaction = new sql.Transaction(pool);
+        
         try {
-            const pool = await poolPromise;
+            await transaction.begin();
+            
+            // Create invoice first
+            const invoiceResult = await new sql.Request(transaction)
+                .input('customerId', sql.UniqueIdentifier, data.customerId)
+                .input('branchId', sql.UniqueIdentifier, data.branchId)
+                .input('vetId', sql.UniqueIdentifier, data.vetId)
+                .query(`
+                    INSERT INTO HoaDon (MaKhachHang, MaChiNhanh, MaNhanVien, TongPhu, TongTienThucTra)
+                    OUTPUT INSERTED.MaHoaDon
+                    VALUES (@customerId, @branchId, @vetId, 0, 0)
+                `);
+            
+            const invoiceId = invoiceResult.recordset[0].MaHoaDon;
             
             // Create appointment
-            const appointmentResult = await pool.request()
+            const appointmentResult = await new sql.Request(transaction)
                 .input('customerId', sql.UniqueIdentifier, data.customerId)
                 .input('petId', sql.UniqueIdentifier, data.petId)
                 .input('branchId', sql.UniqueIdentifier, data.branchId)
                 .input('vetId', sql.UniqueIdentifier, data.vetId)
                 .input('dateTime', sql.DateTime, data.dateTime)
+                .input('invoiceId', sql.UniqueIdentifier, invoiceId)
                 .query(`
-                    INSERT INTO LichHen (MaKhachHang, MaThuCung, MaChiNhanh, MaNVTao, NgayGioHen, KenhDat, TrangThai)
+                    INSERT INTO LichHen (MaKhachHang, MaThuCung, MaChiNhanh, MaNVTao, NgayGioHen, KenhDat, TrangThai, MaHoaDon)
                     OUTPUT INSERTED.MaLichHen
-                    VALUES (@customerId, @petId, @branchId, @vetId, @dateTime, N'Tại quầy', N'Đã xác nhận')
+                    VALUES (@customerId, @petId, @branchId, @vetId, @dateTime, N'Tại quầy', N'Đã xác nhận', @invoiceId)
                 `);
 
             const appointmentId = appointmentResult.recordset[0].MaLichHen;
 
-            // Add services to appointment
+            // Add services to appointment and calculate total
+            let tongPhu = 0;
             for (const service of data.services) {
-                await pool.request()
+                await new sql.Request(transaction)
                     .input('appointmentId', sql.UniqueIdentifier, appointmentId)
                     .input('serviceId', sql.UniqueIdentifier, service.serviceId)
                     .input('vetId', sql.UniqueIdentifier, data.vetId)
@@ -275,10 +323,23 @@ const vetService = {
                         INSERT INTO ChiTietLichHen (MaLichHen, MaDichVu, MaBacSi, DonGiaThucTe)
                         VALUES (@appointmentId, @serviceId, @vetId, @price)
                     `);
+                tongPhu += service.price;
             }
 
-            return { MaLichHen: appointmentId };
+            // Update invoice total
+            await new sql.Request(transaction)
+                .input('invoiceId', sql.UniqueIdentifier, invoiceId)
+                .input('tongPhu', sql.Decimal(18, 0), tongPhu)
+                .query(`
+                    UPDATE HoaDon 
+                    SET TongPhu = @tongPhu, TongTienThucTra = @tongPhu
+                    WHERE MaHoaDon = @invoiceId
+                `);
+
+            await transaction.commit();
+            return { MaLichHen: appointmentId, MaHoaDon: invoiceId };
         } catch (error) {
+            await transaction.rollback();
             console.error('[createAppointment] Error:', error.message, error);
             throw error;
         }

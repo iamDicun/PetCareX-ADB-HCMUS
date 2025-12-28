@@ -5,6 +5,11 @@ import customerService from './customer.service.js';
 // Lấy doanh thu chi nhánh theo dịch vụ và sản phẩm
 const getRevenueByServiceAndProduct = async (MaChiNhanh, TuNgay, DenNgay) => {
     try {
+        console.log('=== Service getRevenueByServiceAndProduct ===');
+        console.log('MaChiNhanh:', MaChiNhanh);
+        console.log('TuNgay:', TuNgay, 'Type:', typeof TuNgay);
+        console.log('DenNgay:', DenNgay, 'Type:', typeof DenNgay);
+        
         const pool = await poolPromise;
         const result = await pool.request()
             .input('MaChiNhanh', sql.UniqueIdentifier, MaChiNhanh)
@@ -12,6 +17,7 @@ const getRevenueByServiceAndProduct = async (MaChiNhanh, TuNgay, DenNgay) => {
             .input('DenNgay', sql.Date, DenNgay)
             .execute('SP_BaoCao_DoanhThu_ChiNhanh_ChiTiet');
         
+        console.log('Result count:', result.recordset?.length);
         return result.recordset;
     } catch (error) {
         console.error('Lỗi trong getRevenueByServiceAndProduct:', error);
@@ -121,6 +127,33 @@ const getTopProducts = async (MaChiNhanh, TuNgay, DenNgay) => {
         return result.recordset;
     } catch (error) {
         console.error('Lỗi trong getTopProducts:', error);
+        throw error;
+    }
+};
+
+// Lấy thống kê dịch vụ hot (được đặt nhiều nhất)
+const getHotServices = async (MaChiNhanh, TuNgay, DenNgay) => {
+    try {
+        const pool = await poolPromise;
+        
+        console.log('=== getHotServices Service ===');
+        console.log('Calling SP with params:', {
+            MaChiNhanh,
+            TuNgay: TuNgay || 'NULL (will use default)',
+            DenNgay: DenNgay || 'NULL (will use default)'
+        });
+        
+        const result = await pool.request()
+            .input('MaChiNhanh', sql.UniqueIdentifier, MaChiNhanh)
+            .input('TuNgay', sql.Date, TuNgay || null)
+            .input('DenNgay', sql.Date, DenNgay || null)
+            .execute('SP_ThongKe_DichVu_Hot_ChiNhanh');
+        
+        console.log('SP returned:', result.recordset?.length || 0, 'records');
+        
+        return result.recordset;
+    } catch (error) {
+        console.error('Lỗi trong getHotServices:', error);
         throw error;
     }
 };
@@ -263,14 +296,33 @@ const getImportHistory = async (MaChiNhanh, page = 1, limit = 10) => {
     }
 };
 
+// Lấy doanh thu thuốc
+const getMedicineRevenue = async (MaChiNhanh, TuNgay, DenNgay) => {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('MaChiNhanh', sql.UniqueIdentifier, MaChiNhanh)
+            .input('TuNgay', sql.Date, TuNgay)
+            .input('DenNgay', sql.Date, DenNgay)
+            .execute('SP_ThongKe_DoanhThu_Thuoc');
+        
+        return result.recordset;
+    } catch (error) {
+        console.error('Lỗi trong getMedicineRevenue:', error);
+        throw error;
+    }
+};
+
 export default {
     getRevenueByServiceAndProduct,
     getOrdersByDateRange,
     getEmployeeRatings,
     getEmployeePerformance,
     getTopProducts,
+    getHotServices,
     getBranchInventory,
     getAllProducts,
     createImportRequest,
-    getImportHistory
+    getImportHistory,
+    getMedicineRevenue
 };

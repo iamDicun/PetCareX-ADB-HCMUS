@@ -2,16 +2,28 @@ import staffService from "../Services/staff.service.js";
 
 const careStaffController = {
     async getMyAppointments(req, res) {
-        const { staffId } = req.query;
+        const { staffId, page = 1, limit = 10 } = req.query;
         try {
             if (!staffId) {
                 return res.status(400).json({ success: false, message: 'Thiếu mã nhân viên' });
             }
-            const appointments = await staffService.getCareStaffAppointments(staffId);
-            res.json({ success: true, appointments });
+            const result = await staffService.getCareStaffAppointments(
+                staffId, 
+                parseInt(page), 
+                parseInt(limit)
+            );
+            res.json({ 
+                success: true, 
+                appointments: result.appointments,
+                pagination: result.pagination
+            });
         } catch (error) {
             console.error('[getMyAppointments] Error:', error.message, error);
-            res.status(500).json({ success: false, message: 'Lỗi máy chủ' });
+            res.status(500).json({ 
+                success: false, 
+                message: 'Lỗi máy chủ',
+                error: error.message 
+            });
         }
     }
 };

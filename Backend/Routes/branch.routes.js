@@ -22,6 +22,9 @@ branchRouter.get('/employee-performance', branchController.getEmployeePerformanc
 // Thống kê sản phẩm bán chạy
 branchRouter.get('/top-products', branchController.getTopProducts);
 
+// Thống kê dịch vụ hot (được đặt nhiều nhất)
+branchRouter.get('/hot-services', branchController.getHotServices);
+
 // Tồn kho của chi nhánh
 branchRouter.get('/inventory', branchController.getBranchInventory);
 
@@ -33,5 +36,7 @@ branchRouter.post('/import-request', branchController.createImportRequest);
 
 // Lấy lịch sử yêu cầu nhập hàng
 branchRouter.get('/import-history', branchController.getImportHistory);
+
+branchRouter.get('/medicine-revenue', branchController.getMedicineRevenue);
 
 export default branchRouter;

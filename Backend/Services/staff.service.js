@@ -397,7 +397,11 @@ async function getPendingAppointments(branchId, page = 1, limit = 10) {
                     LH.MaLichHen, LH.NgayGioHen, LH.TrangThai, LH.KenhDat,
                     KH.HoTen AS TenKhachHang, KH.SoDienThoai,
                     TC.TenThuCung,
-                    HD.TongTienThucTra
+                    COALESCE(HD.TongTienThucTra, (
+                        SELECT SUM(DonGiaThucTe) 
+                        FROM ChiTietLichHen 
+                        WHERE MaLichHen = LH.MaLichHen
+                    ), 0) AS TongTienThucTra
                 FROM LichHen LH
                 JOIN KhachHang KH ON LH.MaKhachHang = KH.MaKhachHang
                 LEFT JOIN ThuCung TC ON LH.MaThuCung = TC.MaThuCung
@@ -450,7 +454,10 @@ async function getAppointmentDetails(appointmentId) {
             .input('appointmentId', sql.UniqueIdentifier, appointmentId)
             .query(`
                 SELECT 
-                    DV.TenDichVu, DV.MoTa, DV.ThoiGianThucHienDuKien,
+                    DV.TenDichVu,
+                    DV.MoTa,
+                    DV.LoaiDichVu,
+                    DV.ThoiGianThucHienDuKien,
                     CTLH.DonGiaThucTe,
                     NV.HoTen AS TenBacSi
                 FROM ChiTietLichHen CTLH
@@ -614,35 +621,68 @@ async function confirmAppointment(appointmentId, staffId) {
     }
 }
 
-async function getCareStaffAppointments(staffId) {
+async function getCareStaffAppointments(staffId, page = 1, limit = 10) {
     try {
         const pool = await poolPromise;
+        const offset = (page - 1) * limit;
+        
+        // Nhân viên chăm sóc không có trong ChiTietLichHen, chỉ có bác sĩ
+        // Nên query lịch hẹn theo chi nhánh của nhân viên
         const result = await pool.request()
             .input('staffId', sql.UniqueIdentifier, staffId)
             .query(`
-                SELECT 
-                    LH.MaLichHen,
-                    LH.NgayGioHen,
-                    LH.TrangThai,
-                    LH.GhiChu,
-                    KH.HoTen AS TenKhachHang,
-                    KH.SoDienThoai AS SoDienThoaiKH,
-                    TC.TenThuCung,
-                    TC.Giong,
-                    DV.TenDichVu,
-                    CTLH.KetQua,
-                    CTLH.ThoiGianThucHien
+                WITH AllAppointments AS (
+                    SELECT 
+                        LH.MaLichHen,
+                        LH.NgayGioHen,
+                        LH.TrangThai,
+                        KH.HoTen AS TenKhachHang,
+                        KH.SoDienThoai AS SoDienThoaiKH,
+                        TC.TenThuCung,
+                        TC.Giong,
+                        STRING_AGG(DV.TenDichVu, ', ') AS TenDichVu,
+                        CN.TenChiNhanh
+                    FROM LichHen LH
+                    JOIN KhachHang KH ON LH.MaKhachHang = KH.MaKhachHang
+                    LEFT JOIN ThuCung TC ON LH.MaThuCung = TC.MaThuCung
+                    LEFT JOIN ChiTietLichHen CTLH ON LH.MaLichHen = CTLH.MaLichHen
+                    LEFT JOIN DichVu DV ON CTLH.MaDichVu = DV.MaDichVu
+                    JOIN ChiNhanh CN ON LH.MaChiNhanh = CN.MaChiNhanh
+                    JOIN NhanVien NV ON NV.MaChiNhanh = CN.MaChiNhanh
+                    WHERE NV.MaNhanVien = @staffId
+                        AND LH.TrangThai IN (N'Chờ xác nhận', N'Đã xác nhận')
+                        AND LH.NgayGioHen >= CAST(GETDATE() AS DATE)
+                    GROUP BY 
+                        LH.MaLichHen, LH.NgayGioHen, LH.TrangThai,
+                        KH.HoTen, KH.SoDienThoai, TC.TenThuCung, TC.Giong, CN.TenChiNhanh
+                )
+                SELECT * FROM AllAppointments
+                ORDER BY NgayGioHen ASC
+                OFFSET ${offset} ROWS
+                FETCH NEXT ${limit} ROWS ONLY;
+                
+                -- Total count
+                SELECT COUNT(*) AS Total
                 FROM LichHen LH
-                JOIN ChiTietLichHen CTLH ON LH.MaLichHen = CTLH.MaLichHen
-                JOIN KhachHang KH ON LH.MaKhachHang = KH.MaKhachHang
-                JOIN ThuCung TC ON LH.MaThuCung = TC.MaThuCung
-                JOIN DichVu DV ON CTLH.MaDichVu = DV.MaDichVu
-                WHERE CTLH.MaBacSi = @staffId
-                AND LH.TrangThai IN (N'Chờ xác nhận', N'Đã xác nhận', N'Đang thực hiện')
-                AND LH.NgayGioHen >= GETDATE()
-                ORDER BY LH.NgayGioHen ASC
+                JOIN ChiNhanh CN ON LH.MaChiNhanh = CN.MaChiNhanh
+                JOIN NhanVien NV ON NV.MaChiNhanh = CN.MaChiNhanh
+                WHERE NV.MaNhanVien = @staffId
+                    AND LH.TrangThai IN (N'Chờ xác nhận', N'Đã xác nhận')
+                    AND LH.NgayGioHen >= CAST(GETDATE() AS DATE);
             `);
-        return result.recordset;
+        
+        const appointments = result.recordsets[0];
+        const total = result.recordsets[1][0].Total;
+        
+        return {
+            appointments,
+            pagination: {
+                page,
+                limit,
+                total,
+                totalPages: Math.ceil(total / limit)
+            }
+        };
     } catch (error) {
         console.error('[getCareStaffAppointments] Error:', error.message, error);
         throw error;
@@ -707,6 +747,115 @@ async function searchCustomers(query) {
     }
 }
 
+// Get pending invoices for a customer
+async function getPendingInvoices(customerId) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('customerId', sql.UniqueIdentifier, customerId)
+            .query(`
+                SELECT 
+                    HD.MaHoaDon,
+                    HD.NgayTao,
+                    HD.TongPhu,
+                    HD.TongTienGiam,
+                    HD.TongTienThucTra,
+                    -- Check if linked to appointment
+                    LH.MaLichHen,
+                    LH.NgayGioHen,
+                    LH.TrangThai AS TrangThaiLichHen,
+                    -- Check if linked to order
+                    DH.MaDonHang,
+                    DH.NgayDat,
+                    DH.TrangThai AS TrangThaiDonHang,
+                    -- Get service/product details
+                    CASE 
+                        WHEN LH.MaLichHen IS NOT NULL THEN (
+                            SELECT STRING_AGG(DV.TenDichVu, ', ')
+                            FROM ChiTietLichHen CTLH
+                            JOIN DichVu DV ON CTLH.MaDichVu = DV.MaDichVu
+                            WHERE CTLH.MaLichHen = LH.MaLichHen
+                        )
+                        WHEN DH.MaDonHang IS NOT NULL THEN (
+                            SELECT STRING_AGG(SP.TenSanPham, ', ')
+                            FROM ChiTietDonHang CTDH
+                            JOIN SanPham SP ON CTDH.MaSanPham = SP.MaSanPham
+                            WHERE CTDH.MaDonHang = DH.MaDonHang
+                        )
+                        ELSE N'Không xác định'
+                    END AS ChiTiet,
+                    CASE 
+                        WHEN LH.MaLichHen IS NOT NULL THEN N'Lịch hẹn'
+                        WHEN DH.MaDonHang IS NOT NULL THEN N'Đơn hàng'
+                        ELSE N'Không xác định'
+                    END AS LoaiGiaoDich
+                FROM HoaDon HD
+                LEFT JOIN LichHen LH ON HD.MaHoaDon = LH.MaHoaDon 
+                    AND LH.TrangThai = N'Đã xác nhận'
+                LEFT JOIN DonHang DH ON HD.MaHoaDon = DH.MaHoaDon 
+                    AND DH.TrangThai = N'Sẵn sàng để lấy'
+                WHERE HD.MaKhachHang = @customerId
+                AND (LH.MaLichHen IS NOT NULL OR DH.MaDonHang IS NOT NULL)
+                ORDER BY HD.NgayTao DESC
+            `);
+        
+        return result.recordset;
+    } catch (error) {
+        console.error('[getPendingInvoices] Error:', error.message, error);
+        throw error;
+    }
+}
+
+// Complete payment - mark invoice and related orders/appointments as complete
+async function completePayment(invoiceId, staffId) {
+    try {
+        const pool = await poolPromise;
+        const transaction = new sql.Transaction(pool);
+        
+        await transaction.begin();
+        
+        try {
+            // Get invoice details
+            const invoiceResult = await new sql.Request(transaction)
+                .input('invoiceId', sql.UniqueIdentifier, invoiceId)
+                .query('SELECT * FROM HoaDon WHERE MaHoaDon = @invoiceId');
+            
+            if (invoiceResult.recordset.length === 0) {
+                throw new Error('Hóa đơn không tồn tại');
+            }
+            
+            // Update related appointments to "Hoàn tất"
+            await new sql.Request(transaction)
+                .input('invoiceId', sql.UniqueIdentifier, invoiceId)
+                .query(`
+                    UPDATE LichHen 
+                    SET TrangThai = N'Hoàn tất'
+                    WHERE MaHoaDon = @invoiceId
+                    AND TrangThai = N'Đã xác nhận'
+                `);
+            
+            // Update related orders to "Hoàn tất"
+            await new sql.Request(transaction)
+                .input('invoiceId', sql.UniqueIdentifier, invoiceId)
+                .query(`
+                    UPDATE DonHang 
+                    SET TrangThai = N'Hoàn tất'
+                    WHERE MaHoaDon = @invoiceId
+                    AND TrangThai = N'Sẵn sàng để lấy'
+                `);
+            
+            await transaction.commit();
+            return { success: true, message: 'Thanh toán thành công' };
+        } catch (error) {
+            await transaction.rollback();
+            throw error;
+        }
+    } catch (error) {
+        console.error('[completePayment] Error:', error.message, error);
+        throw error;
+    }
+}
+
 export default {
     findByPhoneNum,
     findCustomerId,
@@ -728,5 +877,7 @@ export default {
     getCareStaffAppointments,
     registerPetForCustomer,
     getPetTypes,
-    searchCustomers
+    searchCustomers,
+    getPendingInvoices,
+    completePayment
 };

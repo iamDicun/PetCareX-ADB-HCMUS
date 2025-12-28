@@ -12,6 +12,18 @@ const getRevenueByServiceAndProduct = async (req, res) => {
             });
         }
 
+        if (!TuNgay || !DenNgay) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Từ ngày và đến ngày là bắt buộc' 
+            });
+        }
+
+        console.log('=== Revenue Request ===');
+        console.log('MaChiNhanh:', MaChiNhanh);
+        console.log('TuNgay:', TuNgay);
+        console.log('DenNgay:', DenNgay);
+
         const revenue = await branchService.getRevenueByServiceAndProduct(
             MaChiNhanh, 
             TuNgay, 
@@ -161,6 +173,43 @@ const getTopProducts = async (req, res) => {
     }
 };
 
+// Xem thống kê dịch vụ hot (được đặt nhiều nhất)
+const getHotServices = async (req, res) => {
+    try {
+        const { MaChiNhanh, TuNgay, DenNgay } = req.query;
+        
+        console.log('=== getHotServices Controller ===');
+        console.log('Received params:', { MaChiNhanh, TuNgay, DenNgay });
+        
+        if (!MaChiNhanh) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Mã chi nhánh là bắt buộc' 
+            });
+        }
+
+        const services = await branchService.getHotServices(
+            MaChiNhanh, 
+            TuNgay, 
+            DenNgay
+        );
+
+        console.log('Services returned:', services?.length || 0, 'items');
+
+        res.json({
+            success: true,
+            data: services
+        });
+    } catch (error) {
+        console.error('Lỗi khi lấy thống kê dịch vụ:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Lỗi server khi lấy thống kê dịch vụ',
+            error: error.message 
+        });
+    }
+};
+
 // Xem tồn kho của chi nhánh
 const getBranchInventory = async (req, res) => {
     try {
@@ -273,14 +322,40 @@ const getImportHistory = async (req, res) => {
     }
 };
 
+// Lấy doanh thu thuốc
+const getMedicineRevenue = async (req, res) => {
+    try {
+        const { MaChiNhanh, TuNgay, DenNgay } = req.query;
+        
+        if (!MaChiNhanh || !TuNgay || !DenNgay) {
+            return res.status(400).json({ 
+                success: false, 
+                message: 'Thiếu thông tin bắt buộc' 
+            });
+        }
+
+        const data = await branchService.getMedicineRevenue(MaChiNhanh, TuNgay, DenNgay);
+        res.json({ success: true, data });
+    } catch (error) {
+        console.error('Lỗi khi lấy doanh thu thuốc:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Lỗi server khi lấy doanh thu thuốc',
+            error: error.message 
+        });
+    }
+};
+
 export default {
     getRevenueByServiceAndProduct,
     getOrdersByDateRange,
     getEmployeeRatings,
     getEmployeePerformance,
     getTopProducts,
+    getHotServices,
     getBranchInventory,
     getAllProducts,
     createImportRequest,
-    getImportHistory
+    getImportHistory,
+    getMedicineRevenue
 };

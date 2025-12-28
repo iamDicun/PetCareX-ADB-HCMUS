@@ -54,6 +54,15 @@ const StaffDashboard = () => {
     const [branches, setBranches] = useState([]);
     const [selectedBranch, setSelectedBranch] = useState('');
 
+    // Payment states
+    const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [paymentCustomer, setPaymentCustomer] = useState(null);
+    const [paymentSearchQuery, setPaymentSearchQuery] = useState('');
+    const [paymentSearchResults, setPaymentSearchResults] = useState([]);
+    const [showPaymentSearchResults, setShowPaymentSearchResults] = useState(false);
+    const [pendingInvoices, setPendingInvoices] = useState([]);
+    const [selectedInvoice, setSelectedInvoice] = useState(null);
+
     const API_URL = 'http://localhost:5000/api';
 
     // Live search effect
@@ -82,6 +91,33 @@ const StaffDashboard = () => {
         const debounceTimer = setTimeout(performSearch, 300);
         return () => clearTimeout(debounceTimer);
     }, [searchQuery, customer]);
+
+    // Payment search effect
+    useEffect(() => {
+        const performPaymentSearch = async () => {
+            if (paymentSearchQuery.trim().length >= 2 && !paymentCustomer) {
+                try {
+                    const token = localStorage.getItem('token');
+                    const res = await fetch(`${API_URL}/staff/customers/search?query=${encodeURIComponent(paymentSearchQuery)}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    const data = await res.json();
+                    if (data.success && data.customers) {
+                        setPaymentSearchResults(data.customers);
+                        setShowPaymentSearchResults(data.customers.length > 0);
+                    }
+                } catch (error) {
+                    console.error('Payment search error:', error);
+                }
+            } else {
+                setPaymentSearchResults([]);
+                setShowPaymentSearchResults(false);
+            }
+        };
+
+        const debounceTimer = setTimeout(performPaymentSearch, 300);
+        return () => clearTimeout(debounceTimer);
+    }, [paymentSearchQuery, paymentCustomer]);
 
     useEffect(() => {
         loadBranches();
@@ -441,6 +477,66 @@ const StaffDashboard = () => {
         setSelectedItems([]);
     };
 
+    // Payment handling functions
+    const handleSelectPaymentCustomer = async (selectedCustomer) => {
+        setPaymentCustomer(selectedCustomer);
+        setPaymentSearchQuery(selectedCustomer.HoTen);
+        setShowPaymentSearchResults(false);
+        
+        // Load pending invoices for this customer
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_URL}/staff/invoices/pending?customerId=${selectedCustomer.MaKhachHang}`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const data = await res.json();
+            if (data.success) {
+                setPendingInvoices(data.invoices);
+            }
+        } catch (error) {
+            console.error('Error loading invoices:', error);
+        }
+    };
+
+    const handleCompletePayment = async (invoice) => {
+        if (!window.confirm(`Xác nhận thanh toán hóa đơn ${invoice.MaHoaDon.substring(0, 8)}...?`)) {
+            return;
+        }
+        
+        try {
+            const token = localStorage.getItem('token');
+            const res = await fetch(`${API_URL}/staff/invoice/${invoice.MaHoaDon}/complete`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const data = await res.json();
+            if (data.success) {
+                alert('Thanh toán thành công!');
+                // Reload invoices
+                handleSelectPaymentCustomer(paymentCustomer);
+                // Refresh pending lists
+                loadPendingData();
+                loadPendingAppointments();
+            } else {
+                alert('Lỗi: ' + data.message);
+            }
+        } catch (error) {
+            console.error('Error completing payment:', error);
+            alert('Lỗi khi thanh toán');
+        }
+    };
+
+    const handleResetPaymentSearch = () => {
+        setPaymentCustomer(null);
+        setPaymentSearchQuery('');
+        setPendingInvoices([]);
+        setSelectedInvoice(null);
+    };
+
     const handleViewDetails = async (item, type) => {
         setDetailsType(type);
         setDetailsData([]); // Reset data
@@ -620,32 +716,11 @@ const StaffDashboard = () => {
                 <div>
                     <h2 style={{ margin: 0, marginBottom: '5px' }}>🏥 Bảng điều khiển nhân viên</h2>
                     <p style={{ margin: 0, opacity: 0.9 }}>Xin chào, {user?.HoTen || user?.name}</p>
+                    <p style={{ margin: 0, opacity: 0.8, fontSize: '14px', marginTop: '5px' }}>
+                        Chi nhánh: {branches?.find(b => b.MaChiNhanh === user?.MaChiNhanh)?.TenChiNhanh || 'Đang tải...'}
+                    </p>
                 </div>
                 <div style={{ display: 'flex', gap: '15px', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-                        <label style={{ fontSize: '14px', opacity: 0.9 }}>Chi nhánh:</label>
-                        <select
-                            value={selectedBranch}
-                            onChange={(e) => setSelectedBranch(e.target.value)}
-                            style={{
-                                padding: '8px 12px',
-                                borderRadius: '4px',
-                                border: '1px solid rgba(255,255,255,0.3)',
-                                backgroundColor: 'rgba(255,255,255,0.1)',
-                                color: 'white',
-                                fontSize: '14px',
-                                cursor: 'pointer',
-                                minWidth: '200px'
-                            }}
-                        >
-                            <option value="">-- Chọn chi nhánh --</option>
-                            {branches?.map(branch => (
-                                <option key={branch.MaChiNhanh} value={branch.MaChiNhanh} style={{ color: '#2c3e50' }}>
-                                    {branch.TenChiNhanh}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
                     <button onClick={handleLogout} style={{...buttonStyle, backgroundColor: '#e74c3c'}}>Đăng xuất</button>
                 </div>
             </div>
@@ -671,6 +746,12 @@ const StaffDashboard = () => {
                         🐾 Đăng ký thú cưng
                     </button>
                 )}
+                <button 
+                    onClick={() => setShowPaymentModal(true)} 
+                    style={{...buttonStyle, backgroundColor: '#e67e22'}}
+                >
+                    💰 Thanh toán
+                </button>
             </div>
 
             {activeTab === 'pending' && (
@@ -936,6 +1017,145 @@ const StaffDashboard = () => {
                                 disabled={!customer}
                             >
                                 Đăng ký
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Payment Modal */}
+            {showPaymentModal && (
+                <div style={modalOverlayStyle}>
+                    <div style={modalContentStyle}>
+                        <h2 style={{ marginTop: 0, marginBottom: '20px', color: '#2c3e50' }}>💰 Thanh toán</h2>
+                        
+                        {/* Customer Search */}
+                        <div style={{ marginBottom: '20px' }}>
+                            <h3>Tìm khách hàng</h3>
+                            <div style={{ position: 'relative' }}>
+                                <input
+                                    style={inputStyle}
+                                    placeholder="Nhập tên hoặc số điện thoại khách hàng..."
+                                    value={paymentSearchQuery}
+                                    onChange={(e) => setPaymentSearchQuery(e.target.value)}
+                                    disabled={!!paymentCustomer}
+                                />
+                                
+                                {showPaymentSearchResults && !paymentCustomer && (
+                                    <div style={{
+                                        position: 'absolute',
+                                        top: '100%',
+                                        left: 0,
+                                        right: 0,
+                                        backgroundColor: 'white',
+                                        border: '1px solid #ddd',
+                                        borderRadius: '4px',
+                                        maxHeight: '200px',
+                                        overflowY: 'auto',
+                                        zIndex: 1000,
+                                        boxShadow: '0 4px 8px rgba(0,0,0,0.1)'
+                                    }}>
+                                        {paymentSearchResults.map(customer => (
+                                            <div
+                                                key={customer.MaKhachHang}
+                                                onClick={() => handleSelectPaymentCustomer(customer)}
+                                                style={{
+                                                    padding: '10px',
+                                                    cursor: 'pointer',
+                                                    borderBottom: '1px solid #eee',
+                                                    transition: 'background-color 0.2s'
+                                                }}
+                                                onMouseEnter={(e) => e.target.style.backgroundColor = '#f8f9fa'}
+                                                onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
+                                            >
+                                                <strong>{customer.HoTen}</strong> - {customer.SoDienThoai}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                                
+                                {paymentCustomer && (
+                                    <button
+                                        onClick={handleResetPaymentSearch}
+                                        style={{
+                                            position: 'absolute',
+                                            right: '10px',
+                                            top: '50%',
+                                            transform: 'translateY(-50%)',
+                                            padding: '5px 10px',
+                                            backgroundColor: '#e74c3c',
+                                            color: 'white',
+                                            border: 'none',
+                                            borderRadius: '4px',
+                                            cursor: 'pointer'
+                                        }}
+                                    >
+                                        Đổi khách
+                                    </button>
+                                )}
+                            </div>
+                            
+                            {paymentCustomer && (
+                                <div style={{ marginTop: '10px', padding: '10px', backgroundColor: '#d4edda', borderRadius: '4px', color: '#155724' }}>
+                                    ✓ Đã chọn: <strong>{paymentCustomer.HoTen}</strong> - {paymentCustomer.SoDienThoai}
+                                </div>
+                            )}
+                        </div>
+                        
+                        {/* Pending Invoices */}
+                        {paymentCustomer && pendingInvoices.length > 0 && (
+                            <div style={{ marginBottom: '20px' }}>
+                                <h3>Hóa đơn chưa thanh toán</h3>
+                                <table style={tableStyle}>
+                                    <thead>
+                                        <tr>
+                                            <th style={thStyle}>Mã HĐ</th>
+                                            <th style={thStyle}>Loại</th>
+                                            <th style={thStyle}>Ngày tạo</th>
+                                            <th style={thStyle}>Chi tiết</th>
+                                            <th style={thStyle}>Tổng tiền</th>
+                                            <th style={thStyle}>Thao tác</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {pendingInvoices.map(invoice => (
+                                            <tr key={invoice.MaHoaDon}>
+                                                <td style={tdStyle}>{invoice.MaHoaDon.substring(0, 8)}...</td>
+                                                <td style={tdStyle}>{invoice.LoaiGiaoDich}</td>
+                                                <td style={tdStyle}>{new Date(invoice.NgayTao).toLocaleDateString('vi-VN')}</td>
+                                                <td style={tdStyle}>{invoice.ChiTiet}</td>
+                                                <td style={tdStyle}>{invoice.TongTienThucTra?.toLocaleString()} đ</td>
+                                                <td style={tdStyle}>
+                                                    <button
+                                                        onClick={() => handleCompletePayment(invoice)}
+                                                        style={{...buttonStyle, backgroundColor: '#27ae60', padding: '5px 10px'}}
+                                                    >
+                                                        Xác nhận thanh toán
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                        
+                        {paymentCustomer && pendingInvoices.length === 0 && (
+                            <div style={{ padding: '20px', textAlign: 'center', color: '#7f8c8d' }}>
+                                Không có hóa đơn chưa thanh toán
+                            </div>
+                        )}
+                        
+                        {/* Action Buttons */}
+                        <div style={{ display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+                            <button 
+                                onClick={() => {
+                                    setShowPaymentModal(false);
+                                    handleResetPaymentSearch();
+                                }}
+                                style={{...buttonStyle, backgroundColor: '#95a5a6'}}
+                            >
+                                Đóng
                             </button>
                         </div>
                     </div>

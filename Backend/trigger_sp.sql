@@ -476,11 +476,10 @@ CREATE PROCEDURE SP_BaoCao_DoanhThu_ToanHeThong
     @Nam INT
 AS
 BEGIN
-    -- Mục đích: Tổng hợp doanh thu thực tế (sau khi trừ KM/Điểm) của tất cả chi nhánh theo từng tháng
+    -- Mục đích: Tổng hợp doanh thu thực tế (sau khi trừ KM/Điểm) của tất cả chi nhánh trong cả năm
     SELECT 
         CN.MaChiNhanh,
         CN.TenChiNhanh,
-        MONTH(HD.NgayTao) AS Thang,
         SUM(HD.TongTienThucTra) AS TongDoanhThu
     FROM HoaDon HD
     JOIN ChiNhanh CN ON HD.MaChiNhanh = CN.MaChiNhanh
@@ -488,11 +487,9 @@ BEGIN
         YEAR(HD.NgayTao) = @Nam
     GROUP BY 
         CN.MaChiNhanh, 
-        CN.TenChiNhanh, 
-        MONTH(HD.NgayTao)
+        CN.TenChiNhanh
     ORDER BY 
-        CN.TenChiNhanh, 
-        MONTH(HD.NgayTao);
+        TongDoanhThu DESC;
 END;
 GO
 

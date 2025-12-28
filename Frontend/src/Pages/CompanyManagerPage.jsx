@@ -211,6 +211,31 @@ const CompanyManagerPage = () => {
         }
     };
 
+    const handleCompleteRequest = async (requestId) => {
+        if (!window.confirm('Bạn có chắc chắn muốn xác nhận đơn nhập hàng này đã hoàn tất?')) {
+            return;
+        }
+
+        try {
+            const res = await fetch(`http://localhost:5000/api/company-manager/import-requests/${requestId}/complete`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const data = await res.json();
+            if (data.success) {
+                alert(data.message);
+                fetchImportRequests();
+                setSelectedRequest(null);
+                setRequestDetails([]);
+            } else {
+                alert('Lỗi: ' + data.message);
+            }
+        } catch (error) {
+            console.error('Error completing request:', error);
+            alert('Có lỗi xảy ra');
+        }
+    };
+
     const fetchEmployees = async () => {
         setLoading(true);
         try {
@@ -487,19 +512,25 @@ const CompanyManagerPage = () => {
                                     <table style={tableStyle}>
                                         <thead>
                                             <tr>
+                                                <th style={thStyle}>STT</th>
                                                 <th style={thStyle}>Chi nhánh</th>
-                                                <th style={thStyle}>Tháng</th>
-                                                <th style={thStyle}>Tổng doanh thu</th>
+                                                <th style={thStyle}>Tổng doanh thu cả năm</th>
                                             </tr>
                                         </thead>
                                         <tbody>
                                             {systemRevenue.map((item, idx) => (
                                                 <tr key={idx}>
+                                                    <td style={tdStyle}>{idx + 1}</td>
                                                     <td style={tdStyle}>{item.TenChiNhanh}</td>
-                                                    <td style={tdStyle}>Tháng {item.Thang}</td>
                                                     <td style={tdStyle}>{item.TongDoanhThu?.toLocaleString()} VND</td>
                                                 </tr>
                                             ))}
+                                            <tr style={{backgroundColor: '#8e44ad', color: 'white', fontWeight: 'bold', fontSize: '16px'}}>
+                                                <td style={{...tdStyle, color: 'white'}} colSpan="2">TỔNG CỘNG TOÀN HỆ THỐNG</td>
+                                                <td style={{...tdStyle, color: 'white'}}>
+                                                    {systemRevenue.reduce((sum, item) => sum + (item.TongDoanhThu || 0), 0).toLocaleString()} VND
+                                                </td>
+                                            </tr>
                                         </tbody>
                                     </table>
                                 )}
@@ -751,6 +782,14 @@ const CompanyManagerPage = () => {
                                                                         Từ chối
                                                                     </button>
                                                                 </>
+                                                            )}
+                                                            {request.TrangThai === 'Đã duyệt' && (
+                                                                <button 
+                                                                    onClick={() => handleCompleteRequest(request.MaYeuCau)}
+                                                                    style={{...filterButtonStyle, backgroundColor: '#3498db', marginRight: '5px'}}
+                                                                >
+                                                                    Xác nhận hoàn thành
+                                                                </button>
                                                             )}
                                                         </td>
                                                     </tr>

@@ -91,7 +91,7 @@ const companyManagerService = {
                         FROM ChiNhanh 
                         WHERE TrangThai = N'Hoạt động'`);
             
-            return { success: true, branches: result.recordset };
+            return { success: true, data: result.recordset };
         } catch (error) {
             console.error('Error in getAllBranches:', error);
             return { success: false, message: error.message };
@@ -170,6 +170,25 @@ const companyManagerService = {
             return { success: true, message: 'Cập nhật trạng thái thành công' };
         } catch (error) {
             console.error('Error in approveImportRequest:', error);
+            return { success: false, message: error.message };
+        }
+    },
+
+    // Complete import request
+    completeImportRequest: async (requestId) => {
+        try {
+            const pool = await poolPromise;
+            await pool.request()
+                .input('MaYeuCau', sql.UniqueIdentifier, requestId)
+                .query(`
+                    UPDATE YeuCauNhapHang 
+                    SET TrangThai = N'Hoàn tất' 
+                    WHERE MaYeuCau = @MaYeuCau AND TrangThai = N'Đã duyệt'
+                `);
+            
+            return { success: true, message: 'Xác nhận hoàn thành yêu cầu nhập hàng thành công' };
+        } catch (error) {
+            console.error('Error in completeImportRequest:', error);
             return { success: false, message: error.message };
         }
     },

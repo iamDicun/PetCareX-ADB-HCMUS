@@ -39,4 +39,10 @@ branchRouter.get('/import-history', branchController.getImportHistory);
 
 branchRouter.get('/medicine-revenue', branchController.getMedicineRevenue);
 
+// Doanh thu theo ngày (phân trang)
+branchRouter.get('/revenue-by-date', branchController.getRevenueByDate);
+
+// Lịch hẹn theo ngày
+branchRouter.get('/appointments', branchController.getAppointmentsByDate);
+
 export default branchRouter;

@@ -568,6 +568,41 @@ async function submitRating(ratingData) {
     }
 }
 
+// Kiểm tra khách hàng tồn tại theo SĐT
+async function checkCustomerExists(phoneNumber) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('SoDienThoai', sql.VarChar(15), phoneNumber)
+            .execute('SP_KiemTra_KhachHang');
+        
+        return result.recordset[0] || null;
+    } catch (error) {
+        console.error('[checkCustomerExists] Error:', error.message, error);
+        throw error;
+    }
+}
+
+// Tạo khách hàng mới và thẻ thành viên
+async function createCustomerWithCard(customerData) {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('HoTen', sql.NVarChar(100), customerData.hoTen)
+            .input('SoDienThoai', sql.VarChar(15), customerData.soDienThoai)
+            .input('Email', sql.VarChar(100), customerData.email || null)
+            .input('CCCD', sql.VarChar(20), customerData.cccd || null)
+            .input('GioiTinh', sql.NVarChar(5), customerData.gioiTinh || null)
+            .input('NgaySinh', sql.Date, customerData.ngaySinh || null)
+            .execute('SP_TaoMoi_KhachHang_VaThe');
+        
+        return result.recordset[0];
+    } catch (error) {
+        console.error('[createCustomerWithCard] Error:', error.message, error);
+        throw error;
+    }
+}
+
 export default {
     findByPhoneNum,
     getProducts,
@@ -587,5 +622,7 @@ export default {
     getPetMedicalHistory,
     getAppointmentDetails,
     getOrderDetails,
-    submitRating
+    submitRating,
+    checkCustomerExists,
+    createCustomerWithCard
 };

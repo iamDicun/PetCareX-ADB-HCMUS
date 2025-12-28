@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../AuthContext';
 import { useNavigate } from 'react-router-dom';
 import RevenueTab from '../Component/BranchManager/RevenueTab';
+import AppointmentsTab from '../Component/BranchManager/AppointmentsTab';
 import OrdersTab from '../Component/BranchManager/OrdersTab';
 import EmployeesTab from '../Component/BranchManager/EmployeesTab';
 import ProductsTab from '../Component/BranchManager/ProductsTab';
@@ -347,6 +348,19 @@ const BranchManagerPage = () => {
                     />
                 );
 
+            case 'appointments':
+                return (
+                    <AppointmentsTab
+                        branchCode={user?.MaChiNhanh}
+                        startDate={dateRange.tuNgay}
+                        endDate={dateRange.denNgay}
+                        renderDateFilter={renderDateFilter}
+                        tableStyle={styles.tableStyle}
+                        thStyle={styles.thStyle}
+                        tdStyle={styles.tdStyle}
+                    />
+                );
+
             case 'medicine':
                 return (
                     <div>
@@ -481,6 +495,12 @@ const BranchManagerPage = () => {
                     onClick={() => setActiveTab('revenue')}
                 >
                     Doanh thu
+                </button>
+                <button
+                    style={styles.tabButtonStyle(activeTab === 'appointments')}
+                    onClick={() => setActiveTab('appointments')}
+                >
+                    Lịch hẹn
                 </button>
                 <button
                     style={styles.tabButtonStyle(activeTab === 'medicine')}

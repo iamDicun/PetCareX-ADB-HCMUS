@@ -313,6 +313,52 @@ const getMedicineRevenue = async (MaChiNhanh, TuNgay, DenNgay) => {
     }
 };
 
+// Lấy doanh thu theo ngày (lấy tất cả, phân trang ở frontend)
+const getRevenueByDate = async ({ branchId, fromDate, toDate }) => {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('TuNgay', sql.Date, fromDate || new Date(new Date().setDate(new Date().getDate() - 30)))
+            .input('DenNgay', sql.Date, toDate || new Date())
+            .execute('SP_DoanhThu_TheoNgay_PhanTrang');
+        
+        const data = result.recordset || [];
+        
+        // Tính tổng cộng từ data
+        const summary = {
+            totalService: data.reduce((sum, row) => sum + (row.DoanhThuDichVu || 0), 0),
+            totalProduct: data.reduce((sum, row) => sum + (row.DoanhThuBanHang || 0), 0),
+            totalRevenue: data.reduce((sum, row) => sum + (row.TongDoanhThu || 0), 0),
+            totalInvoices: data.reduce((sum, row) => sum + (row.SoHoaDon || 0), 0)
+        };
+        
+        return {
+            data: data,
+            summary: summary
+        };
+    } catch (error) {
+        console.error('Lỗi trong getRevenueByDate:', error);
+        throw error;
+    }
+};
+
+// Lấy danh sách lịch hẹn theo ngày
+const getAppointmentsByDate = async ({ branchId, fromDate, toDate }) => {
+    try {
+        const pool = await poolPromise;
+        const result = await pool.request()
+            .input('MaChiNhanh', sql.UniqueIdentifier, branchId)
+            .input('TuNgay', sql.Date, fromDate || new Date(new Date().setDate(new Date().getDate() - 30)))
+            .input('DenNgay', sql.Date, toDate || new Date())
+            .execute('SP_LichHen_TheoNgay');
+        
+        return result.recordset || [];
+    } catch (error) {
+        console.error('Lỗi trong getAppointmentsByDate:', error);
+        throw error;
+    }
+};
+
 export default {
     getRevenueByServiceAndProduct,
     getOrdersByDateRange,
@@ -324,5 +370,7 @@ export default {
     getAllProducts,
     createImportRequest,
     getImportHistory,
-    getMedicineRevenue
+    getMedicineRevenue,
+    getRevenueByDate,
+    getAppointmentsByDate
 };

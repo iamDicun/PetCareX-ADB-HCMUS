@@ -21,5 +21,7 @@ cusRouter.get('/appointment/:appointmentId/details', cusController.getAppointmen
 cusRouter.get('/order/:orderId/details', cusController.getOrderDetails);
 cusRouter.post('/rating', cusController.submitRating);
 cusRouter.get('/pet/:petId/medical-history', cusController.getPetMedicalHistory);
+cusRouter.get('/check-customer', cusController.checkCustomer);
+cusRouter.post('/create-customer-with-card', cusController.createCustomerWithCard);
 
 export default cusRouter;

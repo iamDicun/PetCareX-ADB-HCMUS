@@ -346,6 +346,57 @@ const getMedicineRevenue = async (req, res) => {
     }
 };
 
+// Lấy doanh thu theo ngày (tất cả dữ liệu)
+const getRevenueByDate = async (req, res) => {
+    try {
+        const { branchId, fromDate, toDate } = req.query;
+
+        const result = await branchService.getRevenueByDate({
+            branchId,
+            fromDate,
+            toDate
+        });
+
+        res.json({
+            success: true,
+            data: result.data,
+            summary: result.summary
+        });
+    } catch (error) {
+        console.error('Lỗi khi lấy doanh thu theo ngày:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Lỗi server khi lấy doanh thu theo ngày',
+            error: error.message
+        });
+    }
+};
+
+// Lấy danh sách lịch hẹn theo ngày
+const getAppointmentsByDate = async (req, res) => {
+    try {
+        const { branchCode, startDate, endDate } = req.query;
+
+        const data = await branchService.getAppointmentsByDate({
+            branchId: branchCode,
+            fromDate: startDate,
+            toDate: endDate
+        });
+
+        res.json({
+            success: true,
+            data: data
+        });
+    } catch (error) {
+        console.error('Lỗi khi lấy lịch hẹn:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Lỗi server khi lấy lịch hẹn',
+            error: error.message
+        });
+    }
+};
+
 export default {
     getRevenueByServiceAndProduct,
     getOrdersByDateRange,
@@ -357,5 +408,7 @@ export default {
     getAllProducts,
     createImportRequest,
     getImportHistory,
-    getMedicineRevenue
+    getMedicineRevenue,
+    getRevenueByDate,
+    getAppointmentsByDate
 };

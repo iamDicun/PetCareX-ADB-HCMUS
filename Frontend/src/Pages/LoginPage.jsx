@@ -1,12 +1,23 @@
 import { useState } from "react";
 import { useAuth } from "../AuthContext";
 import { useNavigate } from "react-router-dom";
+import axios from "axios";
 
 const LoginPage = () => {
   const { cusLogin, staffLogin } = useAuth();
   const [activeTab, setActiveTab] = useState('customer');
   const [hoten, setHoten] = useState("");
   const [sdt, setSdt] = useState("");
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newCustomerData, setNewCustomerData] = useState({
+    hoTen: '',
+    soDienThoai: '',
+    email: '',
+    cccd: '',
+    gioiTinh: 'Nam',
+    ngaySinh: ''
+  });
+  const [loading, setLoading] = useState(false);
   
   const navigate = useNavigate();
 
@@ -15,8 +26,43 @@ const LoginPage = () => {
     let ok = false;
     if (activeTab === 'staff') {
         ok = await staffLogin(hoten, sdt);
+        if (!ok) {
+          alert("Sai thông tin đăng nhập");
+          return;
+        }
     } else {
-        ok = await cusLogin(hoten, sdt);
+        // Kiểm tra khách hàng tồn tại trước
+        try {
+          const response = await axios.get('http://localhost:5000/api/customer/check-customer', {
+            params: { phoneNumber: sdt }
+          });
+          
+          if (response.data.exists) {
+            // Khách hàng đã tồn tại, kiểm tra tên
+            const customer = response.data.data;
+            if (customer.HoTen.toLowerCase() === hoten.toLowerCase()) {
+              ok = await cusLogin(hoten, sdt);
+            } else {
+              alert("Tên khách hàng không khớp");
+              return;
+            }
+          } else {
+            // Khách hàng chưa tồn tại, hiển thị modal tạo mới
+            setNewCustomerData({
+              hoTen: hoten,
+              soDienThoai: sdt,
+              email: '',
+              cccd: '',
+              gioiTinh: 'Nam',
+              ngaySinh: ''
+            });
+            setShowCreateModal(true);
+            return;
+          }
+        } catch (error) {
+          alert("Lỗi khi kiểm tra thông tin: " + (error.response?.data?.message || error.message));
+          return;
+        }
     }
 
     if (!ok) {
@@ -45,6 +91,36 @@ const LoginPage = () => {
       } else {
           navigate("/CustomerPage");
       }
+    }
+  };
+
+  const handleCreateCustomer = async (e) => {
+    e.preventDefault();
+    
+    if (!newCustomerData.hoTen || !newCustomerData.soDienThoai) {
+      alert('Họ tên và số điện thoại là bắt buộc');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await axios.post(
+        'http://localhost:5000/api/customer/create-customer-with-card',
+        newCustomerData
+      );
+
+      if (response.data.success) {
+        alert('Tạo tài khoản thành công! Vui lòng đăng nhập.');
+        setShowCreateModal(false);
+        // Reset form
+        setHoten(newCustomerData.hoTen);
+        setSdt(newCustomerData.soDienThoai);
+      }
+    } catch (error) {
+      alert(error.response?.data?.message || 'Lỗi khi tạo tài khoản');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -102,8 +178,6 @@ const LoginPage = () => {
 
   return (
     <div style={containerStyle}>
-      
-
       <form style={formStyle} onSubmit={handleLogin}>
         <h2 style={{ textAlign: 'center', color: '#333', margin: '0 0 20px 0' }}>
             {activeTab === 'staff' ? 'Đăng nhập Nhân viên' : 'Đăng nhập Khách hàng'}
@@ -143,8 +217,128 @@ const LoginPage = () => {
         />
         <button type="submit" style={buttonStyle}>Đăng nhập</button>
       </form>
+
+      {/* Modal tạo khách hàng mới */}
+      {showCreateModal && (
+        <div style={modalBackdropStyle} onClick={() => setShowCreateModal(false)}>
+          <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
+            <h2 style={{ marginBottom: '20px' }}>Tạo tài khoản khách hàng</h2>
+            <p style={{ marginBottom: '20px', color: '#666' }}>
+              Không tìm thấy tài khoản. Vui lòng nhập thông tin đầy đủ để tạo tài khoản mới.
+            </p>
+            
+            <form onSubmit={handleCreateCustomer}>
+              <label style={labelStyle}>
+                Họ tên <span style={{ color: 'red' }}>*</span>
+              </label>
+              <input
+                type="text"
+                value={newCustomerData.hoTen}
+                onChange={(e) => setNewCustomerData({...newCustomerData, hoTen: e.target.value})}
+                style={inputStyle}
+                required
+              />
+
+              <label style={labelStyle}>
+                Số điện thoại <span style={{ color: 'red' }}>*</span>
+              </label>
+              <input
+                type="tel"
+                value={newCustomerData.soDienThoai}
+                style={{...inputStyle, backgroundColor: '#f0f0f0'}}
+                disabled
+              />
+
+              <label style={labelStyle}>Email</label>
+              <input
+                type="email"
+                value={newCustomerData.email}
+                onChange={(e) => setNewCustomerData({...newCustomerData, email: e.target.value})}
+                placeholder="Nhập email"
+                style={inputStyle}
+              />
+
+              <label style={labelStyle}>CCCD</label>
+              <input
+                type="text"
+                value={newCustomerData.cccd}
+                onChange={(e) => setNewCustomerData({...newCustomerData, cccd: e.target.value})}
+                placeholder="Nhập số CCCD"
+                style={inputStyle}
+              />
+
+              <label style={labelStyle}>Giới tính</label>
+              <select
+                value={newCustomerData.gioiTinh}
+                onChange={(e) => setNewCustomerData({...newCustomerData, gioiTinh: e.target.value})}
+                style={inputStyle}
+              >
+                <option value="Nam">Nam</option>
+                <option value="Nữ">Nữ</option>
+                <option value="Khác">Khác</option>
+              </select>
+
+              <label style={labelStyle}>Ngày sinh</label>
+              <input
+                type="date"
+                value={newCustomerData.ngaySinh}
+                onChange={(e) => setNewCustomerData({...newCustomerData, ngaySinh: e.target.value})}
+                style={inputStyle}
+              />
+
+              <div style={{ marginTop: '20px', display: 'flex', gap: '10px' }}>
+                <button 
+                  type="submit" 
+                  style={buttonStyle}
+                  disabled={loading}
+                >
+                  {loading ? 'Đang tạo...' : 'Tạo tài khoản'}
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setShowCreateModal(false)} 
+                  style={{...buttonStyle, backgroundColor: '#95a5a6'}}
+                >
+                  Hủy
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
+};
+
+const modalBackdropStyle = {
+  position: 'fixed',
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  display: 'flex',
+  justifyContent: 'center',
+  alignItems: 'center',
+  zIndex: 1000
+};
+
+const modalContentStyle = {
+  backgroundColor: 'white',
+  padding: '30px',
+  borderRadius: '8px',
+  width: '90%',
+  maxWidth: '500px',
+  maxHeight: '90vh',
+  overflow: 'auto'
+};
+
+const labelStyle = {
+  display: 'block',
+  marginTop: '10px',
+  marginBottom: '5px',
+  fontWeight: 'bold',
+  fontSize: '14px'
 };
 
 export default LoginPage;

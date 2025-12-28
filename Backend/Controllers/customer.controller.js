@@ -226,6 +226,67 @@ const cusController = {
         } catch (error) {
             res.status(500).json({ success: false, message: error.message });
         }
+    },
+
+    // Kiểm tra khách hàng tồn tại
+    checkCustomer: async (req, res) => {
+        try {
+            const { phoneNumber } = req.query;
+            
+            if (!phoneNumber) {
+                return res.status(400).json({ 
+                    success: false, 
+                    message: 'Số điện thoại là bắt buộc' 
+                });
+            }
+
+            const customer = await CusService.checkCustomerExists(phoneNumber);
+            
+            res.json({ 
+                success: true, 
+                exists: !!customer,
+                data: customer 
+            });
+        } catch (error) {
+            res.status(500).json({ 
+                success: false, 
+                message: error.message 
+            });
+        }
+    },
+
+    // Tạo khách hàng mới kèm thẻ thành viên
+    createCustomerWithCard: async (req, res) => {
+        try {
+            const { hoTen, soDienThoai, email, cccd, gioiTinh, ngaySinh } = req.body;
+            
+            if (!hoTen || !soDienThoai) {
+                return res.status(400).json({ 
+                    success: false, 
+                    message: 'Họ tên và số điện thoại là bắt buộc' 
+                });
+            }
+
+            const newCustomer = await CusService.createCustomerWithCard({
+                hoTen,
+                soDienThoai,
+                email,
+                cccd,
+                gioiTinh,
+                ngaySinh
+            });
+            
+            res.json({ 
+                success: true, 
+                message: 'Tạo khách hàng và thẻ thành viên thành công',
+                data: newCustomer 
+            });
+        } catch (error) {
+            res.status(500).json({ 
+                success: false, 
+                message: error.message 
+            });
+        }
     }
 
 };
